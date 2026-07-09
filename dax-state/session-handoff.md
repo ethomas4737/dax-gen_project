@@ -13,7 +13,8 @@
 **Verified so far:** D-SCRIPT human PPI pairs independently checked via mygene.info — 0 COVID hits, 1 negligible non-functional IGHV pseudogene entry (kept, per human decision).
 
 **Recent commits:**
-- Project init from `dax-demo` template (pending first commit as of this handoff).
+- `6c510bd` — Bootstrap: spec, README/CLAUDE.md, dax-state rewrite for 3-dataset curation + EDA.
+- `ef7a509` — init from dax-demo template.
 
 ## Next action
 
@@ -32,7 +33,7 @@ Not in use for Phase 1 (fetch + EDA is CPU/IO-bound; no GPU compute needed). Rev
 ## WSL / local state
 
 - **Repo:** `/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/` on `main`. Reinitialized fresh (not carrying `dax-demo`'s git history). Harness at sibling `../dax/` (pinned SHA in `dax-state/pinned-dax-sha.txt`).
-- **Pending changes:** bootstrap rewrites (README, CLAUDE.md, spec, dax-state placeholders) not yet committed.
+- **Pending changes:** none (bootstrap rewrites committed at `6c510bd`).
 
 ## Recovery recipe
 
