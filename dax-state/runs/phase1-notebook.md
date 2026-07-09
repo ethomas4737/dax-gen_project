@@ -3,8 +3,8 @@
 ## Current state
 **Last updated:** 2026-07-09
 **Status:** done
-**Load-bearing:** `docs/phase1_eda_walkthrough.ipynb` is a human-facing verification/follow-along artifact consolidating steps 1–4's work; not a new analysis (no new findings beyond `dax-state/runs/phase1-{1,2,3,4}.md`).
-**What's new since last update:** Initial creation.
+**Load-bearing:** `docs/phase1_eda_walkthrough.ipynb` is a human-facing verification/follow-along artifact. Section 4 (PLM-readiness) contains genuinely new findings not in the original Phase 1 EDA scripts/reports — see below.
+**What's new since last update:** Added a "PLM-readiness checks" section (context-window fit, vocabulary/non-standard residues, positive-fraction-vs-length-bin) in response to the human noting a PLM is planned downstream.
 
 ## Setup
 
@@ -25,7 +25,7 @@
 
 ## Counts
 
-16 code cells, 12 markdown cells, all executed with 0 errors (verified via `nbformat` scan for `output_type == "error"`).
+21 code cells, 15 markdown cells, all executed with 0 errors (verified via `nbformat` scan for `output_type == "error"`).
 
 ## Verification
 
@@ -34,7 +34,13 @@
 
 ## Findings
 
-No new findings — this notebook consolidates and re-verifies steps 1–4's results for human review, structured as: intro → PPI (load, positive fraction, seq-length, exclusion re-verification) → AVIDa (overview, by-antigen, seq-length, exclusion re-verification) → MLAEP (binary-label positive fractions, remaining 6 files) → summary table.
+Structured as: intro → PPI → AVIDa → MLAEP → **PLM-readiness (new)** → summary table.
+
+New findings from section 4 (PLM-readiness), prompted by the human's plan to use a PLM downstream:
+- **Context window:** nothing exceeds ~1022 residues anywhere (max 800 for PPI, 201 MLAEP, 179 AVIDa) — no truncation handling needed for any dataset.
+- **Vocabulary:** AVIDa and MLAEP are fully standard-alphabet (20 aa). **PPI is not** — `U` (selenocysteine) and `X` (unresolved residue) appear in human (221/70,529 seqs), mouse (217/40,606), fly (8/19,310), worm (1/25,930); yeast/ecoli clean.
+- **Length-confounded labels — real finding for PPI:** positive fraction is NOT flat across sequence-length deciles (unlike the flat ~9.09% across species). Shortest-pair decile = 0.165 (~1.8x baseline), longest = 0.103, middle deciles ~0.07-0.08. This is a genuine shortcut-learning risk for a length-sensitive PLM-based classifier.
+- AVIDa-hIL6's analogous by-length-bin pattern is noisy/non-monotonic — judged more likely confounded with antigen identity (positive fraction already varies 1.1-13.7% by antigen) than a clean length effect; flagged with lower confidence than the PPI finding.
 
 ## Provenance
 

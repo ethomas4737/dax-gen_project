@@ -8,13 +8,13 @@
 
 ## Current position
 
-**Phase:** Phase 1 plan fully executed (`dax-state/plan-phase1.md`, all rows `done`). Deliverables: `rawdata/{ppi,avida,mlaep}/` (gitignored, each with `SOURCE.md`) + `docs/eda-{ppi,avida,mlaep}.md` + `docs/figures/*.png` (8 figures). Scripts in `src/spikes/eda_{ppi,avida,mlaep}.py` (not promoted — hardcoded paths/dates, promotion deferred to phase close).
+**Phase:** Phase 1 plan fully executed (`dax-state/plan-phase1.md`, all rows `done`). Deliverables: `rawdata/{ppi,avida,mlaep}/` (gitignored, each with `SOURCE.md`) + `docs/eda-{ppi,avida,mlaep}.md` + `docs/figures/*.png` (8 figures) + `docs/phase1_eda_walkthrough.ipynb` (executed, human follow-along notebook, now includes a PLM-readiness section). Scripts in `src/spikes/eda_{ppi,avida,mlaep}.py` (not promoted — hardcoded paths/dates, promotion deferred to phase close).
 
-**Key EDA findings:** PPI positive fraction fixed at ~9.09% (1:10 sampling) across all species; AVIDa hIL6 3.66% / hTNFa 12.22% positive; MLAEP ACE2-bind 8.05% + 8 per-antibody-clone escape fractions (4.1–18.2%). Full findings in `dax-state/runs/phase1-{1,2,3,4}.md`.
+**Key EDA findings:** PPI positive fraction fixed at ~9.09% (1:10 sampling) across all species; AVIDa hIL6 3.66% / hTNFa 12.22% positive; MLAEP ACE2-bind 8.05% + 8 per-antibody-clone escape fractions (4.1–18.2%). **PLM-readiness (human plans to use a PLM downstream):** all sequences well within PLM context limits; PPI has `U`/`X` residues in ~0.1-0.3% of seqs (AVIDa/MLAEP fully standard-alphabet); **PPI positive fraction is confounded with pair length** (0.165 shortest decile vs ~0.07-0.08 mid-range vs 0.103 longest) — a real shortcut-learning risk to control for when the downstream modeling task is scoped. Full findings in `dax-state/runs/phase1-{1,2,3,4,notebook}.md`.
 
 **Recent commits:**
+- `3547bc4` — Add executed Phase 1 EDA walkthrough notebook.
 - `f43780d` — Fetch & curate all 3 datasets (steps 0–3-qa).
-- `6c510bd` — Bootstrap: spec, README/CLAUDE.md, dax-state rewrite.
 
 ## Next action
 
