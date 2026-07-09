@@ -42,12 +42,11 @@ Findings from section 4 (PLM-readiness), prompted by the human's plan to use a P
 - **Length-confounded labels — real finding for PPI:** positive fraction is NOT flat across sequence-length deciles (unlike the flat ~9.09% across species). Shortest-pair decile = 0.165 (~1.8x baseline), longest = 0.103, middle deciles ~0.07-0.08. This is a genuine shortcut-learning risk for a length-sensitive PLM-based classifier.
 - AVIDa-hIL6's analogous by-length-bin pattern is noisy/non-monotonic — judged more likely confounded with antigen identity (positive fraction already varies 1.1-13.7% by antigen) than a clean length effect; flagged with lower confidence than the PPI finding.
 
-**Section 5 — train/test identity leakage (PPI), the highest-priority finding in this whole EDA phase:**
+**Section 5 — train/test protein overlap (PPI):**
 - **100% of `human_test`'s 15,525 unique proteins — by protein ID AND by exact sequence — already appear in `human_train`.** Zero test proteins are genuinely unseen.
 - 89/52,725 test pairs (0.17%) are exact duplicates of a train pair (same two sequences, same label).
-- Root cause: the split holds out pairings, not proteins — combined with the high isoform-duplication rate already found in §1.3.
-- Implication: "test performance" on this benchmark demonstrates generalization to new pairings of known proteins, not to genuinely novel proteins — a materially weaker claim than usually assumed of a train/test split. A protein-level held-out split would need to be constructed separately if the downstream goal requires that claim.
-- Only checked for human (only species with both train+test files); mouse/fly/yeast/worm/ecoli are test-only cross-species-transfer files, a different question.
+- **Corrected framing (human pushed back, correctly):** initial write-up overstated this as exposing a benchmark flaw. Checked D-SCRIPT's README + published methods: the project's actual generalization claim is cross-species transfer (human-trained model evaluated directly on mouse/fly/yeast/worm/ecoli — entirely different organisms), not within-human protein disjointness. The human train/test split is very likely a standard pair-level (interactome-completion) split by design, where protein-sharing between train/test is expected and intentional. Revised implication: this split demonstrates generalization to new pairings of known proteins (a real, useful eval), not to novel human proteins specifically — that narrower claim would need a custom protein-disjoint split, only if actually needed downstream.
+- Only checked for human (only species with both train+test files); mouse/fly/yeast/worm/ecoli are test-only cross-species-transfer files, D-SCRIPT's actual generalization test.
 
 ## Provenance
 
