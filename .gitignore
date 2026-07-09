@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+*.swp
+
+# Environment-local dirs (on DCC these are symlinks into lab storage).
+/data
+/runs
+/rawdata
+
+# External repos cloned only on DCC.
+src/spikes/external/
+
+# Model weights / large tensors.
+*.pt
+*.npy
+*.safetensors
+
+# Logs.
+logs/*
+!logs/.gitkeep
+.claude/
+
+# Handoff packages — entire deliverable folder is gitignored; audit trail
+# lives in dax-state/runs/. Builders kept under src/spikes/handoffs/.
+docs/handoffs/*/
