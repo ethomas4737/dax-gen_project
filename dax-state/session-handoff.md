@@ -32,7 +32,7 @@ Not in use for Phase 1 (fetch + EDA is CPU/IO-bound; no GPU compute needed). Rev
 
 ## WSL / local state
 
-- **Repo:** `/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/` on `main`. Reinitialized fresh (not carrying `dax-demo`'s git history). Harness at sibling `../dax/` (pinned SHA in `dax-state/pinned-dax-sha.txt`).
+- **Repo:** `/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/` on `main`, pushed to `github.com:ethomas4737/dax-gen_project` (origin). Reinitialized fresh (not carrying `dax-demo`'s git history). Harness at sibling `../dax/` (pinned SHA in `dax-state/pinned-dax-sha.txt`).
 - **Pending changes:** none (bootstrap rewrites committed at `6c510bd`).
 
 ## Recovery recipe
