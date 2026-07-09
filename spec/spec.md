@@ -39,7 +39,7 @@ All three land under `rawdata/` (gitignored, per project convention) with a `SOU
 1. **Step 1 — Fetch & curate D-SCRIPT PPI data.** Pull `data/pairs/*.tsv` + `data/seqs/*.fasta` from the D-SCRIPT GitHub repo (pinned commit) into `rawdata/ppi/`.
 2. **Step 2 — Fetch & curate AVIDa antibody data.** Pull `AVIDa-hIL6` and `AVIDa-hTNFa` from HuggingFace into `rawdata/avida/`, explicitly verifying no SARS-CoV-2 rows are present.
 3. **Step 3 — Fetch & curate MLAEP data.** Pull the listed preprocessed files from the MLAEP GitHub repo (pinned commit) into `rawdata/mlaep/`.
-4. **Step 4 — EDA per dataset.** Three separate EDA reports/notebooks (not a merged analysis): row counts, label balance (binding/non-binding where applicable), sequence-length distributions, species/antigen/variant breakdowns, missingness, duplicate-sequence checks.
+4. **Step 4 — EDA per dataset.** Three separate EDA reports/notebooks (not a merged analysis): row counts, **positive fraction** (share of rows labeled interacting/binding=1, overall and broken down by species/antigen/variant where applicable), sequence-length distributions, species/antigen/variant breakdowns, missingness, duplicate-sequence checks.
 
 (Subsequent steps as needed.)
 
