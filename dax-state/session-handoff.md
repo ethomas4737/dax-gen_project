@@ -4,7 +4,7 @@
 
 ## Last updated
 
-**2026-07-09** — Phase 1 (curate 3 datasets + EDA) fully executed, not yet formally closed. Human pulled forward the previously-deferred dataset-merging item: built + EDA'd 4 combined variants (D1-D4), including a second held-out axis (8-antibody escape panel, sequences sourced from CoV-AbDab). See `spec/spec.md` "Revision 2026-07-09".
+**2026-07-09** — Phase 1 (curate 3 datasets + EDA) fully executed, not yet formally closed. Human pulled forward the previously-deferred dataset-merging item: built + EDA'd 4 combined variants (D1-D4), including a second held-out axis (8-antibody escape panel, sequences sourced from CoV-AbDab). Also ran a length-only baseline that found length is a **stronger-than-expected** confound in both D1 and D2. See `spec/spec.md` "Revision 2026-07-09".
 
 ## Current position
 
@@ -16,15 +16,17 @@
 
 **Key findings (combined D1-D4):** Both held-out axes verified genuinely clean (zero sequence overlap with D3, both directions). 1 sequence (human TNF-alpha) shared between D1/D2 (not a leakage concern). ACE2 axis has zero length variance and ACE2 (805aa) exceeds D1's 800aa training cap by 5aa. `seq_a`/`seq_b` column semantics differ by `pair_type` in D3 (symmetric PPI vs. asymmetric antibody/antigen). Antibody-panel binds-fractions (82-96% per clone) cross-checked as exactly `1-escape_fraction` against original MLAEP numbers. Full detail in `dax-state/runs/combined-datasets-2026-07-09.md` and `docs/eda-combined.md`.
 
+**Length-only baseline results (`docs/length_baseline_results.md`):** length-derived features alone (no sequence content) meaningfully beat random in **all 3 cases tested**: D1-PPI AUROC 0.652/AUPRC 2x floor; D2-hIL6 AUROC **0.803**/AUPRC 3.9x floor (stronger than PPI); D2-hTNFa AUROC 0.762/AUPRC 3.3x floor (small n, more variance). hIL6's strength isn't fully explained by antigen-mean-length differences (only 150.8-151.2aa spread) — likely reflects CDR3-length-correlated binding promiscuity at the individual-VHH level. **Any future PLM-based model must clear these numbers by a real margin** to demonstrate real sequence-specific learning rather than a length/composition shortcut.
+
 **Recent commits:**
-- (pending) — Add docs/eda-combined.html companion report.
-- `6972a1d` — Add 8-antibody held-out axis (CoV-AbDab-sourced sequences).
+- (pending) — Add length-only baseline script + results.
+- `64484a9` — Add docs/eda-combined.html companion report.
 
 ## Next action
 
-1. **Human review** of `docs/eda-combined.md`, both held-out axes, and the `seq_a`/`seq_b` role-asymmetry note.
-2. Decide whether D3/D4 are inputs to an actual PLM fine-tuning run next, or whether more EDA/variants are wanted first.
-3. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — promotion pass, phase-summary run-note, `[phase1-done]` commit — still outstanding, deferred while this combined-dataset work was prioritized.
+1. **Human review** of `docs/length_baseline_results.md` — the length signal is stronger than initially expected in both D1 and D2, worth discussing before scoping any fine-tuning run.
+2. Decide whether D3/D4 are inputs to an actual PLM fine-tuning run next (with the length-only floor as a required side-by-side comparison), or whether more EDA/variants are wanted first.
+3. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — promotion pass, phase-summary run-note, `[phase1-done]` commit — still outstanding, deferred while this combined-dataset/baseline work was prioritized.
 
 ## Open blockers
 
