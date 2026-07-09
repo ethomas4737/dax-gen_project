@@ -54,6 +54,16 @@ Positive fraction is flat at ~9.09% across species (by construction), but **not 
 
 AVIDa-hIL6 shows a superficially similar by-length pattern, but it's noisy/non-monotonic rather than a clean trend — more likely confounded with antigen identity (which already varies 1.1–13.7% independent of length) than a genuine length effect. Lower-confidence finding, flagged for awareness rather than as a confirmed risk.
 
+### 3.1 How to address it
+
+Roughly in order of effort — steps 1–2 are the necessary minimum (diagnose before treating); step 3 is the usual fix if the baseline in step 1 explains a meaningful chunk of variance:
+
+1. **Quantify it — build a length-only baseline.** Train the simplest possible classifier using *only* `(len_a, len_b)` (or their sum/product) as features. Whatever AUROC/AUPRC that gets is the floor: if a PLM-based model doesn't clear it by a meaningful margin, it isn't learning much beyond length. Cheap to run, and the standard sanity check for shortcut confounds.
+2. **Report performance stratified by length bin** (the same bins used for the positive-fraction check). A model that only does well in the short/long extremes — where positive rate is already inflated — is diagnostic of length-shortcut learning rather than real signal.
+3. **Rebalance so length stops correlating with the label** — either resample to match length distributions between positive and negative pairs, or use importance/inverse-propensity weighting during training to downweight the "easy" length-confounded examples.
+4. **Keep the length-only baseline as a permanent reporting companion**, not a one-time check — report it alongside every future model result.
+5. **(More involved) Adversarial/invariance training** — add a head that tries to predict length from the embedding and train the main model to make it fail, if the baseline in step 1 turns out to be uncomfortably strong. Usually only needed if steps 1–4 aren't enough.
+
 ---
 
 ## 4. PLM-readiness (given the planned downstream PLM use)
@@ -82,7 +92,7 @@ AVIDa-hIL6 shows a superficially similar by-length pattern, but it's noisy/non-m
 ## 6. Recommendations for scoping the downstream task
 
 1. **If the downstream goal specifically needs a novel-human-protein generalization claim, don't rely on D-SCRIPT's built-in human train/test split as evidence** — it's a pair-level split by design (§2); construct your own protein-disjoint split for that specific claim. If the goal is cross-species generalization or pair-level/interactome-completion evaluation, the existing splits (human train/test + the cross-species test files) already serve that purpose as intended.
-2. **Decide the modeling task with the length confound in mind** — plan from the start to check performance against a length-only baseline, not as an afterthought (§3).
+2. **Decide the modeling task with the length confound in mind** — plan from the start to check performance against a length-only baseline, not as an afterthought (§3.1).
 3. **Consider isoform-aware splitting for PPI** in general, given the high duplicate-sequence rate, if you build your own custom split.
 4. **Confirm PLM tokenizer handling of `U`/`X`** before committing to a specific pretrained PLM, since PPI is the dataset affected.
 5. **AVIDa's per-antigen positive-fraction variation (1.1–13.7%)** suggests antigen identity is a meaningful covariate — worth deciding whether the downstream task treats antigens jointly (pooled) or separately (per-antigen models/evaluation).
