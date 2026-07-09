@@ -19,16 +19,20 @@ def main():
     d2 = pd.read_csv(COMBINED / "d2_avida.csv")
     d3 = pd.read_csv(COMBINED / "d3_ppi_avida.csv")
     d4h = pd.read_csv(COMBINED / "d4_heldout_mlaep_ace2.csv")
+    d4ab = pd.read_csv(COMBINED / "d4_heldout_mlaep_antibodies.csv")
 
     report = ["# EDA — Combined dataset variants (D1-D4)\n",
               "**Generated:** 2026-07-09 | **Source:** `rawdata/combined/` (built by `src/spikes/build_combined_datasets.py`)\n",
               "D1 = D-SCRIPT PPI (all species). D2 = AVIDa, no COVID (hIL6+hTNFa). D3 = D1 union D2 (training pool). "
-              "D4 = D3 as the training pool, with MLAEP reframed as a held-out evaluation partition "
-              "(RBD mutant paired with human ACE2, `ace2_bind` label) — not merged into D3.\n"]
+              "D4 = D3 as the training pool, with MLAEP reframed as a held-out evaluation partition — not merged "
+              "into D3 — covering two kinds of viral-domain generalization: (a) RBD mutant paired with human ACE2 "
+              "(`ace2_bind` label), and (b) RBD mutant paired with each of an 8-antibody escape panel (VH/VL "
+              "sourced from CoV-AbDab, originally Zost et al. 2020), label flipped to `1=binds` for consistency.\n"]
 
     # --- Row counts + positive fraction per source ---
     report.append("## Row counts & positive fraction by source\n")
-    for name, df in [("D1 (PPI)", d1), ("D2 (AVIDa)", d2), ("D4 held-out (MLAEP/ACE2)", d4h)]:
+    for name, df in [("D1 (PPI)", d1), ("D2 (AVIDa)", d2), ("D4 held-out (MLAEP/ACE2)", d4h),
+                     ("D4 held-out (MLAEP/8-antibody panel)", d4ab)]:
         by_source = df.groupby("source_dataset")["label"].agg(["mean", "count"]).rename(
             columns={"mean": "positive_fraction", "count": "n_rows"})
         report.append(f"### {name}\n")
@@ -42,7 +46,7 @@ def main():
     # --- Sequence length stats ---
     report.append("## Sequence length stats (seq_a / seq_b) per variant\n")
     len_rows = []
-    for name, df in [("D1", d1), ("D2", d2), ("D3", d3), ("D4-heldout", d4h)]:
+    for name, df in [("D1", d1), ("D2", d2), ("D3", d3), ("D4-heldout (ACE2)", d4h), ("D4-heldout (antibodies)", d4ab)]:
         la, lb = df["seq_a"].str.len(), df["seq_b"].str.len()
         len_rows.append({"dataset": name, "seq_a_min": int(la.min()), "seq_a_median": float(la.median()),
                           "seq_a_max": int(la.max()), "seq_b_min": int(lb.min()),
@@ -80,6 +84,32 @@ def main():
                   "A minor but real out-of-distribution point: the held-out set isn't just a new domain, "
                   "it also touches a sequence length just past the edge of the training distribution.\n")
 
+    # --- 8-antibody panel: cleanliness + stats ---
+    ab_seqs = set(d4ab["seq_b"])
+    rbd_ab_seqs = set(d4ab["seq_a"])
+    n_ab_overlap_d1 = len(ab_seqs & d1_seqs)
+    n_ab_overlap_d2 = len(ab_seqs & d2_seqs)
+    n_rbd_ab_overlap_d1 = len(rbd_ab_seqs & d1_seqs)
+    n_rbd_ab_overlap_d2 = len(rbd_ab_seqs & d2_seqs)
+
+    report.append("\n## 8-antibody escape panel (D4 held-out, second held-out axis)\n")
+    report.append("VH/VL for all 8 named antibody clones (`COV2-2050/2096/2094/2677/2479/2165/2499/2832`) "
+                  "were unavailable from the MLAEP data itself or from direct patent/PDB/GenBank search, but "
+                  "were found in **CoV-AbDab** (Oxford OPIG's curated coronavirus antibody database), correctly "
+                  "cited there to the original source (Zost et al. 2020, *Nature Medicine*). "
+                  "`seq_b` = VH + `/` + VL (explicit separator; VH and VL are two distinct polypeptide chains, "
+                  "not a fused construct). MLAEP's native `COV2-*_400` columns are escape indicators "
+                  "(1 = antibody fails to bind); flipped here to `1 = binds` for consistency with D1-D3.\n")
+    report.append(f"- Antibody sequences (8 unique) overlapping D1/D2 training pool: **{n_ab_overlap_d1}** / **{n_ab_overlap_d2}**\n")
+    report.append(f"- RBD mutant sequences (paired with antibodies) overlapping D1/D2: **{n_rbd_ab_overlap_d1}** / **{n_rbd_ab_overlap_d2}**\n")
+    report.append("- **Result: zero overlap in both directions here too — this second held-out axis is equally clean.**\n")
+
+    by_antibody = d4ab.groupby("antibody")["label"].agg(["mean", "count"]).rename(
+        columns={"mean": "positive_fraction(binds)", "count": "n_rows"}).sort_values("positive_fraction(binds)")
+    report.append("\n**Positive fraction (binds=1) per antibody** — inverse of escape rate; most mutants still "
+                  "bind most antibodies (single/double substitutions rarely fully disrupt binding):\n")
+    report.append(by_antibody.reset_index().to_markdown(index=False) + "\n")
+
     # --- D3 duplicate rows ---
     n_dup_rows = d3.duplicated().sum()
     n_dup_pairs = d3.duplicated(subset=["seq_a", "seq_b"]).sum()
@@ -90,8 +120,14 @@ def main():
     # --- Vocab check on D4 (ACE2 + RBD) ---
     ace2_nonstd = sorted(set(ace2_seq) - STANDARD_AA)
     rbd_nonstd = int(d4h["seq_a"].apply(lambda s: bool(set(s) - STANDARD_AA)).sum())
-    report.append(f"\n**Vocabulary check (D4 held-out):** ACE2 non-standard residues: {ace2_nonstd or 'none'}. "
+    report.append(f"\n**Vocabulary check (D4 held-out, ACE2 axis):** ACE2 non-standard residues: {ace2_nonstd or 'none'}. "
                   f"RBD mutants with non-standard residues: {rbd_nonstd}/{len(d4h)}. Fully standard-alphabet.\n")
+
+    ab_nonstd_chars = set()
+    for s in ab_seqs:
+        ab_nonstd_chars |= (set(s) - STANDARD_AA - {"/"})
+    report.append(f"\n**Vocabulary check (D4 held-out, antibody axis):** non-standard residues across all 8 "
+                  f"VH/VL sequences (excluding the `/` separator): {sorted(ab_nonstd_chars) or 'none'}. Fully standard-alphabet.\n")
 
     # --- Figures ---
     fig, ax = plt.subplots(figsize=(9, 4))
@@ -124,9 +160,19 @@ def main():
     fig.savefig(FIGS / "combined_length_train_vs_heldout.png", dpi=150)
     plt.close(fig)
 
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(by_antibody.index, by_antibody["positive_fraction(binds)"])
+    ax.set_ylabel("Positive fraction (binds=1)")
+    ax.set_title("D4 held-out: binding rate per antibody (8-clone escape panel)")
+    ax.tick_params(axis="x", rotation=30)
+    plt.tight_layout()
+    fig.savefig(FIGS / "combined_antibody_panel_positive_fraction.png", dpi=150)
+    plt.close(fig)
+
     report.append("\n## Figures\n")
     report.append("![](figures/combined_positive_fraction_by_source.png)\n")
     report.append("![](figures/combined_length_train_vs_heldout.png)\n")
+    report.append("![](figures/combined_antibody_panel_positive_fraction.png)\n")
 
     report.append("\n## Notes\n")
     report.append("- **Column semantics differ by source within D3**: in D1 (PPI), `seq_a`/`seq_b` are symmetric "

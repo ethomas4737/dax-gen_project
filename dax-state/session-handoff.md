@@ -4,25 +4,25 @@
 
 ## Last updated
 
-**2026-07-09** — Phase 1 (curate 3 datasets + EDA) fully executed, not yet formally closed. On top of that, human pulled forward the previously-deferred dataset-merging item: built + EDA'd 4 combined variants (D1-D4). See `spec/spec.md` "Revision 2026-07-09".
+**2026-07-09** — Phase 1 (curate 3 datasets + EDA) fully executed, not yet formally closed. Human pulled forward the previously-deferred dataset-merging item: built + EDA'd 4 combined variants (D1-D4), including a second held-out axis (8-antibody escape panel, sequences sourced from CoV-AbDab). See `spec/spec.md` "Revision 2026-07-09".
 
 ## Current position
 
 **Phase 1 deliverables:** `rawdata/{ppi,avida,mlaep}/` (gitignored, each with `SOURCE.md`) + `docs/eda-{ppi,avida,mlaep}.md` + `docs/figures/*.png` + `docs/phase1_eda_walkthrough.ipynb` (executed) + `docs/phase1_eda_summary.md`/`.html` (consolidated report, also a Claude Artifact). Not formally closed (no close-out checklist run yet).
 
-**Combined-dataset deliverables (new):** `rawdata/combined/{d1_ppi,d2_avida,d3_ppi_avida,d4_heldout_mlaep_ace2}.csv` (gitignored, `SOURCE.md` present) + `docs/eda-combined.md`. D1=D-SCRIPT PPI (716,517 rows), D2=AVIDa no-COVID (579,471), D3=D1∪D2 training pool (1,295,988), D4-heldout=MLAEP reframed as (RBD_mutant, human_ACE2, ace2_bind) (19,132), kept separate from D3 by design (held-out eval, not merged into training). Built by `src/spikes/build_combined_datasets.py` + `eda_combined.py`.
+**Combined-dataset deliverables:** `rawdata/combined/{d1_ppi,d2_avida,d3_ppi_avida,d4_heldout_mlaep_ace2,d4_heldout_mlaep_antibodies}.csv` (gitignored, `SOURCE.md` present) + `docs/eda-combined.md`. D1=D-SCRIPT PPI (716,517 rows), D2=AVIDa no-COVID (579,471), D3=D1∪D2 training pool (1,295,988). D4 held-out has **two axes**: (a) ACE2 (19,132 rows, RBD_mutant+human_ACE2, `ace2_bind` label) and (b) an 8-antibody escape panel (153,056 rows = 8×19,132, RBD_mutant+VH/VL, label flipped to `1=binds`) — VH/VL sourced from CoV-AbDab since the original paper (Zost et al. 2020) gates its sequences behind "available on request." Both axes verified zero-overlap with the D3 training pool. Built by `src/spikes/build_combined_datasets.py` + `eda_combined.py`.
 
-**Key findings (Phase 1):** PPI positive fraction fixed ~9.09% (1:10 sampling); AVIDa hIL6 3.66%/hTNFa 12.22%; MLAEP ACE2-bind 8.05%. PLM-readiness: PPI human train/test shares 100% of proteins (pair-level split by design, not a flaw — see corrected framing in journal); PPI positive fraction confounded with pair length (remediation steps in `docs/phase1_eda_summary.md` §3.1); all seqs within PLM context limits; PPI has U/X in ~0.1-0.3% of seqs.
+**Key findings (Phase 1):** PPI positive fraction fixed ~9.09% (1:10 sampling); AVIDa hIL6 3.66%/hTNFa 12.22%; MLAEP ACE2-bind 8.05%. PLM-readiness: PPI human train/test shares 100% of proteins (pair-level split by design, not a flaw); PPI positive fraction confounded with pair length (remediation steps in `docs/phase1_eda_summary.md` §3.1); all seqs within PLM context limits; PPI has U/X in ~0.1-0.3% of seqs.
 
-**Key findings (combined D1-D4):** D4's held-out set is verified genuinely clean — zero sequence overlap with the D3 training pool in either direction. 1 sequence (human TNF-alpha) shared between D1/D2 (not a leakage concern). D4 held-out has zero length variance (RBD mutants constant 201aa, ACE2 constant 805aa — 5aa past D1's 800aa training cap). `seq_a`/`seq_b` column semantics differ by `pair_type` in D3 (symmetric in PPI rows, asymmetric antibody/antigen in AVIDa rows) — worth an explicit role column if the downstream architecture needs it. Full detail in `dax-state/runs/combined-datasets-2026-07-09.md` and `docs/eda-combined.md`.
+**Key findings (combined D1-D4):** Both held-out axes verified genuinely clean (zero sequence overlap with D3, both directions). 1 sequence (human TNF-alpha) shared between D1/D2 (not a leakage concern). ACE2 axis has zero length variance and ACE2 (805aa) exceeds D1's 800aa training cap by 5aa. `seq_a`/`seq_b` column semantics differ by `pair_type` in D3 (symmetric PPI vs. asymmetric antibody/antigen). Antibody-panel binds-fractions (82-96% per clone) cross-checked as exactly `1-escape_fraction` against original MLAEP numbers. Full detail in `dax-state/runs/combined-datasets-2026-07-09.md` and `docs/eda-combined.md`.
 
 **Recent commits:**
-- (pending) — Build D1-D4 combined datasets + EDA.
-- `721abcf` — Add §3.1 length-confound remediation steps + docs/phase1_eda_summary.html report.
+- (pending) — Add 8-antibody held-out axis (CoV-AbDab-sourced sequences).
+- `fab73d7` — Build D1-D4 combined datasets + EDA.
 
 ## Next action
 
-1. **Human review** of `docs/eda-combined.md` and the combined-dataset design (esp. the `seq_a`/`seq_b` role-asymmetry note).
+1. **Human review** of `docs/eda-combined.md`, both held-out axes, and the `seq_a`/`seq_b` role-asymmetry note.
 2. Decide whether D3/D4 are inputs to an actual PLM fine-tuning run next, or whether more EDA/variants are wanted first.
 3. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — promotion pass, phase-summary run-note, `[phase1-done]` commit — still outstanding, deferred while this combined-dataset work was prioritized.
 

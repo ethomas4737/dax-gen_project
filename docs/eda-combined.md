@@ -2,7 +2,7 @@
 
 **Generated:** 2026-07-09 | **Source:** `rawdata/combined/` (built by `src/spikes/build_combined_datasets.py`)
 
-D1 = D-SCRIPT PPI (all species). D2 = AVIDa, no COVID (hIL6+hTNFa). D3 = D1 union D2 (training pool). D4 = D3 as the training pool, with MLAEP reframed as a held-out evaluation partition (RBD mutant paired with human ACE2, `ace2_bind` label) — not merged into D3.
+D1 = D-SCRIPT PPI (all species). D2 = AVIDa, no COVID (hIL6+hTNFa). D3 = D1 union D2 (training pool). D4 = D3 as the training pool, with MLAEP reframed as a held-out evaluation partition — not merged into D3 — covering two kinds of viral-domain generalization: (a) RBD mutant paired with human ACE2 (`ace2_bind` label), and (b) RBD mutant paired with each of an 8-antibody escape panel (VH/VL sourced from CoV-AbDab, originally Zost et al. 2020), label flipped to `1=binds` for consistency.
 
 ## Row counts & positive fraction by source
 
@@ -31,6 +31,19 @@ D1 = D-SCRIPT PPI (all species). D2 = AVIDa, no COVID (hIL6+hTNFa). D3 = D1 unio
 |:-------------------|--------------------:|---------:|
 | mlaep_ace2_heldout |           0.0804934 |    19132 |
 
+### D4 held-out (MLAEP/8-antibody panel)
+
+| source_dataset          |   positive_fraction |   n_rows |
+|:------------------------|--------------------:|---------:|
+| mlaep_cov2-2050_heldout |            0.923009 |    19132 |
+| mlaep_cov2-2094_heldout |            0.895463 |    19132 |
+| mlaep_cov2-2096_heldout |            0.818001 |    19132 |
+| mlaep_cov2-2165_heldout |            0.959231 |    19132 |
+| mlaep_cov2-2479_heldout |            0.951443 |    19132 |
+| mlaep_cov2-2499_heldout |            0.825057 |    19132 |
+| mlaep_cov2-2677_heldout |            0.902833 |    19132 |
+| mlaep_cov2-2832_heldout |            0.936232 |    19132 |
+
 ### D3 (D1 union D2) by pair_type
 
 | pair_type        |   positive_fraction |   n_rows |
@@ -40,12 +53,13 @@ D1 = D-SCRIPT PPI (all species). D2 = AVIDa, no COVID (hIL6+hTNFa). D3 = D1 unio
 
 ## Sequence length stats (seq_a / seq_b) per variant
 
-| dataset    |   seq_a_min |   seq_a_median |   seq_a_max |   seq_b_min |   seq_b_median |   seq_b_max |
-|:-----------|------------:|---------------:|------------:|------------:|---------------:|------------:|
-| D1         |          50 |            344 |         800 |          50 |            350 |         800 |
-| D2         |         100 |            152 |         179 |         218 |            218 |         233 |
-| D3         |          50 |            158 |         800 |          50 |            218 |         800 |
-| D4-heldout |         201 |            201 |         201 |         805 |            805 |         805 |
+| dataset                 |   seq_a_min |   seq_a_median |   seq_a_max |   seq_b_min |   seq_b_median |   seq_b_max |
+|:------------------------|------------:|---------------:|------------:|------------:|---------------:|------------:|
+| D1                      |          50 |            344 |         800 |          50 |            350 |         800 |
+| D2                      |         100 |            152 |         179 |         218 |            218 |         233 |
+| D3                      |          50 |            158 |         800 |          50 |            218 |         800 |
+| D4-heldout (ACE2)       |         201 |            201 |         201 |         805 |            805 |         805 |
+| D4-heldout (antibodies) |         201 |            201 |         201 |         225 |            233 |         241 |
 
 ## Held-out cleanliness (D4)
 
@@ -66,10 +80,38 @@ D1 = D-SCRIPT PPI (all species). D2 = AVIDa, no COVID (hIL6+hTNFa). D3 = D1 unio
 **Length distribution shift:** D1's training proteins are capped at 800aa max, but D4's held-out ACE2 sequence is **805aa — 5 residues longer than anything seen in D1 training**. A minor but real out-of-distribution point: the held-out set isn't just a new domain, it also touches a sequence length just past the edge of the training distribution.
 
 
+## 8-antibody escape panel (D4 held-out, second held-out axis)
+
+VH/VL for all 8 named antibody clones (`COV2-2050/2096/2094/2677/2479/2165/2499/2832`) were unavailable from the MLAEP data itself or from direct patent/PDB/GenBank search, but were found in **CoV-AbDab** (Oxford OPIG's curated coronavirus antibody database), correctly cited there to the original source (Zost et al. 2020, *Nature Medicine*). `seq_b` = VH + `/` + VL (explicit separator; VH and VL are two distinct polypeptide chains, not a fused construct). MLAEP's native `COV2-*_400` columns are escape indicators (1 = antibody fails to bind); flipped here to `1 = binds` for consistency with D1-D3.
+
+- Antibody sequences (8 unique) overlapping D1/D2 training pool: **0** / **0**
+
+- RBD mutant sequences (paired with antibodies) overlapping D1/D2: **0** / **0**
+
+- **Result: zero overlap in both directions here too — this second held-out axis is equally clean.**
+
+
+**Positive fraction (binds=1) per antibody** — inverse of escape rate; most mutants still bind most antibodies (single/double substitutions rarely fully disrupt binding):
+
+| antibody   |   positive_fraction(binds) |   n_rows |
+|:-----------|---------------------------:|---------:|
+| COV2-2096  |                   0.818001 |    19132 |
+| COV2-2499  |                   0.825057 |    19132 |
+| COV2-2094  |                   0.895463 |    19132 |
+| COV2-2677  |                   0.902833 |    19132 |
+| COV2-2050  |                   0.923009 |    19132 |
+| COV2-2832  |                   0.936232 |    19132 |
+| COV2-2479  |                   0.951443 |    19132 |
+| COV2-2165  |                   0.959231 |    19132 |
+
+
 **D3 duplicate rows:** 3,886 exact duplicate rows; 3,950 duplicate (seq_a, seq_b) pairs ignoring label — inherited mostly from D1's known `ecoli_test.tsv` duplicate rows (see `docs/eda-ppi.md`), not a new issue introduced by combining.
 
 
-**Vocabulary check (D4 held-out):** ACE2 non-standard residues: none. RBD mutants with non-standard residues: 0/19132. Fully standard-alphabet.
+**Vocabulary check (D4 held-out, ACE2 axis):** ACE2 non-standard residues: none. RBD mutants with non-standard residues: 0/19132. Fully standard-alphabet.
+
+
+**Vocabulary check (D4 held-out, antibody axis):** non-standard residues across all 8 VH/VL sequences (excluding the `/` separator): none. Fully standard-alphabet.
 
 
 ## Figures
@@ -77,6 +119,8 @@ D1 = D-SCRIPT PPI (all species). D2 = AVIDa, no COVID (hIL6+hTNFa). D3 = D1 unio
 ![](figures/combined_positive_fraction_by_source.png)
 
 ![](figures/combined_length_train_vs_heldout.png)
+
+![](figures/combined_antibody_panel_positive_fraction.png)
 
 
 ## Notes
