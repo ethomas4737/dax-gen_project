@@ -4,23 +4,23 @@
 
 ## Last updated
 
-**2026-07-09** — Bootstrapped from `dax-demo` template. Phase 1 spec drafted and approved (three-dataset curation + EDA). README/CLAUDE.md updated for the real project. No phase opened yet.
+**2026-07-09** — All Phase 1 steps (0 through 4-qa) done: 3 datasets fetched/curated into `rawdata/` and EDA reports generated + independently QA'd. Phase not formally closed yet (no close-out checklist run, no human sign-off on findings).
 
 ## Current position
 
-**Phase:** None open yet. Spec is drafted: curate D-SCRIPT PPI data (excl. COVID/antibody), AVIDa-hIL6 + AVIDa-hTNFa antibody data (excl. SARS-CoV-2), and MLAEP repo-included preprocessed data — kept separate, not merged — then produce EDA per dataset. See `spec/spec.md`.
+**Phase:** Phase 1 plan fully executed (`dax-state/plan-phase1.md`, all rows `done`). Deliverables: `rawdata/{ppi,avida,mlaep}/` (gitignored, each with `SOURCE.md`) + `docs/eda-{ppi,avida,mlaep}.md` + `docs/figures/*.png` (8 figures). Scripts in `src/spikes/eda_{ppi,avida,mlaep}.py` (not promoted — hardcoded paths/dates, promotion deferred to phase close).
 
-**Verified so far:** D-SCRIPT human PPI pairs independently checked via mygene.info — 0 COVID hits, 1 negligible non-functional IGHV pseudogene entry (kept, per human decision).
+**Key EDA findings:** PPI positive fraction fixed at ~9.09% (1:10 sampling) across all species; AVIDa hIL6 3.66% / hTNFa 12.22% positive; MLAEP ACE2-bind 8.05% + 8 per-antibody-clone escape fractions (4.1–18.2%). Full findings in `dax-state/runs/phase1-{1,2,3,4}.md`.
 
 **Recent commits:**
-- `6c510bd` — Bootstrap: spec, README/CLAUDE.md, dax-state rewrite for 3-dataset curation + EDA.
-- `ef7a509` — init from dax-demo template.
+- `f43780d` — Fetch & curate all 3 datasets (steps 0–3-qa).
+- `6c510bd` — Bootstrap: spec, README/CLAUDE.md, dax-state rewrite.
 
 ## Next action
 
-1. **Draft `plan-phase1.md`** from the approved spec (4 steps: fetch+curate D-SCRIPT, fetch+curate AVIDa, fetch+curate MLAEP, per-dataset EDA).
-2. **Surface the plan to the human** before executing (Article 1).
-3. Dispatch `executor` per step once approved.
+1. **Human review** of the 3 EDA reports (`docs/eda-*.md`) and findings.
+2. If satisfied: run the Phase 1 **close-out checklist** (`../dax/phase-lifecycle.md`) — promotion pass, phase-summary run-note, decisions/session-handoff rewrite, `[phase1-done]` commit.
+3. Then scope the downstream modeling task (deferred in spec) and open Phase 2.
 
 ## Open blockers
 

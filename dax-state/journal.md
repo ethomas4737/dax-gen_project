@@ -20,3 +20,5 @@ For `dispatch` rows, append a cost block at the end of the summary: `(model=…,
 | 2026-07-09 | qa | 2-qa | PASS. 0 SARS-CoV-2 Ag_labels in either file. Column order differs between hIL6/hTNFa files (label/Ag_label swapped) — EDA must read by name. |
 | 2026-07-09 | step | 3 | MLAEP 7 preprocessed files fetched into `rawdata/mlaep/` (commit `cbd21f4`). See runs/phase1-3.md. |
 | 2026-07-09 | qa | 3-qa | PASS. All files size-verified. Noted `merged_all.jsonl` is generic (non-COVID) structural data, distinct from the other 6 COVID-specific files. |
+| 2026-07-09 | step | 4 | EDA generated for all 3 datasets: `docs/eda-{ppi,avida,mlaep}.md` + 8 figures. Positive fraction reported per spec (PPI ~9.09% fixed ratio; AVIDa hIL6 3.66%/hTNFa 12.22%; MLAEP ACE2-bind 8.05% + 8 per-clone escape fractions). See runs/phase1-4.md. |
+| 2026-07-09 | qa | 4-qa | PASS. Independently recomputed 3 headline positive-fraction numbers by separate method (awk / fresh pandas read) — exact match. All 8 figures valid PNGs; reports clean of leftover errors. |
