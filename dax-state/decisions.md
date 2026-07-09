@@ -1,9 +1,9 @@
 # Autonomous decisions
 
 ## Current state
-**Last updated:** YYYY-MM-DD
-**Load-bearing as of this date:** (nothing yet — project bootstrapped, no decisions logged)
-**What's new since last update:** Initial scaffold from `dax-demo` template.
+**Last updated:** 2026-07-09
+**Load-bearing as of this date:** (nothing yet — all bootstrap-time scope choices, e.g. D-SCRIPT/AVIDa/MLAEP dataset scope and the IGHV pseudogene call, were explicitly human-confirmed, not autonomous)
+**What's new since last update:** Initial scaffold from `dax-demo` template; Phase 1 spec drafted.
 
 Append-only. Log material decisions made without human consultation: architectural choices, tradeoffs, deviations from plan. If a prior decision is later reversed, append a new entry — do not edit.
 

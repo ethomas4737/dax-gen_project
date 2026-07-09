@@ -4,20 +4,22 @@
 
 ## Last updated
 
-**YYYY-MM-DD** — Project scaffolded from `dax-demo` template. No spec yet, no phases yet, no DCC project dir yet. The first action is to write the Phase 1 spec.
+**2026-07-09** — Bootstrapped from `dax-demo` template. Phase 1 spec drafted and approved (three-dataset curation + EDA). README/CLAUDE.md updated for the real project. No phase opened yet.
 
 ## Current position
 
-**Phase:** None. Project bootstrapped from `dax-demo`; spec not yet drafted.
+**Phase:** None open yet. Spec is drafted: curate D-SCRIPT PPI data (excl. COVID/antibody), AVIDa-hIL6 + AVIDa-hTNFa antibody data (excl. SARS-CoV-2), and MLAEP repo-included preprocessed data — kept separate, not merged — then produce EDA per dataset. See `spec/spec.md`.
+
+**Verified so far:** D-SCRIPT human PPI pairs independently checked via mygene.info — 0 COVID hits, 1 negligible non-functional IGHV pseudogene entry (kept, per human decision).
 
 **Recent commits:**
-- Project init: `<sha>` — copied from `dax-demo` template; renamed; pinned harness SHA refreshed.
+- Project init from `dax-demo` template (pending first commit as of this handoff).
 
 ## Next action
 
-1. **Write the Phase 1 spec** in `spec/spec.md`. Use the template that's already in the file; replace placeholder content with the real goal, deliverables, acceptance criteria, constraints, and open questions. Dispatch the spec-writer role (`../dax/agent-configs/spec-writer.md`) if scope warrants it; for a small first project the orchestrator can write it inline.
-2. **Surface the draft to the human** before going further (Article 1).
-3. **Draft `plan-phase1.md`** once the spec is approved.
+1. **Draft `plan-phase1.md`** from the approved spec (4 steps: fetch+curate D-SCRIPT, fetch+curate AVIDa, fetch+curate MLAEP, per-dataset EDA).
+2. **Surface the plan to the human** before executing (Article 1).
+3. Dispatch `executor` per step once approved.
 
 ## Open blockers
 
@@ -25,28 +27,15 @@ None.
 
 ## DCC state
 
-| | |
-|---|---|
-| Mount | `~/dcc/` (check before any DCC work) |
-| SSH master | (check on first DCC interaction) |
-| Interactive GPU alloc | **None.** This project hasn't started any DCC work yet. |
-| DCC project dir | **Not yet created.** Run `CREATENEWPROJECT` (or equivalent) on DCC to set up `~/projects/<projname>/` with the standard `src/`/`qa/`/`spec/`/`data/`/`runs/`/`rawdata/` layout before any sbatch work. |
+Not in use for Phase 1 (fetch + EDA is CPU/IO-bound; no GPU compute needed). Revisit once a downstream modeling task is scoped in a later phase.
 
-## WSL state
+## WSL / local state
 
-- **Repo:** `~/work/rohitsinghlab/repos/<projname>/` on `main`. Init commit only.
-- **Pending changes:** none.
+- **Repo:** `/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/` on `main`. Reinitialized fresh (not carrying `dax-demo`'s git history). Harness at sibling `../dax/` (pinned SHA in `dax-state/pinned-dax-sha.txt`).
+- **Pending changes:** bootstrap rewrites (README, CLAUDE.md, spec, dax-state placeholders) not yet committed.
 
 ## Recovery recipe
 
-**WSL.** `git status` + `tail -10 dax-state/journal.md`.
+`git status` + `tail -10 dax-state/journal.md`.
 
-**DCC** (run after >30-min gap or session resume):
-
-```
-mount | grep -q "rsingh/dcc"    || mount-dcc
-ssh -O check dcc-login 2>&1     || ssh dcc-login true
-dcc-gpu-status                  # if no active alloc, surface — do NOT silently reallocate
-```
-
-**Project-specific recovery steps:** (add here as the project develops — env activations, checkpoint paths, daemon restarts, etc.)
+**Project-specific recovery steps:** none yet — add env activations, checkpoint paths, etc. as the project develops.

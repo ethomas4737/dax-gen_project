@@ -9,6 +9,9 @@ __pycache__/
 /runs
 /rawdata
 
+# Nested ai-utils clone (kept locally for --add-dir; has its own git history).
+/ai-utils
+
 # External repos cloned only on DCC.
 src/spikes/external/
 

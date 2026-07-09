@@ -1,8 +1,6 @@
-# dax-demo — Claude Code Instructions
+# dax-gen_project — Claude Code Instructions
 
-This is a DAX project repo (skeleton template). The DAX harness lives at `../dax/`.
-
-> **Template note.** When you copy this repo into a real project (`cp -r dax-demo dax-<your-project>`), update: project name throughout this file; project name in `README.md`; spec content in `spec/spec.md`; the placeholder rows in `dax-state/journal.md` and `dax-state/session-handoff.md`; and refresh `dax-state/pinned-dax-sha.txt` to the current `../dax/` HEAD. See `docs/walkthrough.md` for the full bootstrap sequence.
+This is a DAX project repo. The DAX harness lives at `../dax/`. Goal: curate three independent sequence-interaction datasets (PPI via D-SCRIPT, antibody-antigen via AVIDa, viral antigenic evolution via MLAEP) and produce EDA per dataset — see `spec/spec.md` for the full goal, data sources, and acceptance criteria.
 
 ## At session start
 
@@ -63,7 +61,7 @@ Each numbered plan step follows this lifecycle (mirror of `../dax/phase-lifecycl
 
 ## Relevant skills
 
-The following Claude Code skills are commonly invoked from a DAX project. See `docs/walkthrough.md` § Skill ecosystem for when each applies:
+The following Claude Code skills are commonly invoked from a DAX project. See `docs/dax-demo-walkthrough.md` § Skill ecosystem for when each applies:
 
 - **`rohit-dax-session`** — orchestrator boot at session start.
 - **`rohit-dcc-workflow`** — WSL-side DCC operations via the `dcc`/`dcc-gpu` wrappers and SSHFS mount at `~/dcc/`.
