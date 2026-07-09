@@ -2,8 +2,8 @@
 
 ## Current state
 **Last updated:** 2026-07-09
-**Load-bearing as of this date:** Phase 1 spec drafted; no phase opened yet.
-**What's new since last update:** Bootstrapped from dax-demo template; spec written from scratch covering the three-dataset curation + EDA goal.
+**Load-bearing as of this date:** Phase 1 (curate 3 datasets + EDA) executed. Human has now requested dataset combinations (D1-D4, see Revision below) ahead of the originally-deferred merging item — in progress.
+**What's new since last update:** See "Revision 2026-07-09" at bottom — D1/D2/D3/D4 combined-dataset definitions.
 
 ## Goal
 
@@ -71,6 +71,17 @@ All three land under `rawdata/` (gitignored, per project convention) with a `SOU
 2. Should `COGNANO/VHHCorpus-2M` (generic VHH sequence corpus, no antigen labels) be included as a fourth reference set, or is it out of scope since it's not antigen-interaction data?
 
 ---
+
+## Revision 2026-07-09 — dataset combinations requested (pulls forward a deferred item)
+
+Human requested 4 combined-dataset variants, ahead of the "any merging/unification" item originally deferred to Phase 2+:
+
+- **D1** = D-SCRIPT PPI (all species/splits), unified to `(seq_a, seq_b, label)`.
+- **D2** = AVIDa, no COVID (hIL6 + hTNFa), unified to `(seq_a=VHH, seq_b=antigen, label)`.
+- **D3** = D1 ∪ D2 (concatenated, common schema, tagged by `pair_type`/`source_dataset`).
+- **D4** = D3 as the training pool, with MLAEP reframed as a **held-out evaluation partition** (not merged into training rows): each of the 19,132 RBD mutants in `GMM_covid_info_seq.csv` is paired with the human ACE2 receptor sequence (fetched from UniProt Q9BYF1) using the `ace2_bind` column as the label — a genuine PPI-shaped row (viral RBD ↔ host receptor), used only to evaluate whether a model trained on D3 (zero viral data) generalizes to viral antigen binding.
+
+This narrows/operationalizes the previously-deferred "Any merging/unification of the three datasets into a common schema" item — decided now rather than left fully open. See `dax-state/journal.md` for build details and `dax-state/runs/` for the run-note.
 
 <!--
 Spec-writing notes (per `../dax/agent-configs/spec-writer.md` + Legislation §3):

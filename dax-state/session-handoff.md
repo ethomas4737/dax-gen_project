@@ -4,23 +4,27 @@
 
 ## Last updated
 
-**2026-07-09** — All Phase 1 steps (0 through 4-qa) done: 3 datasets fetched/curated into `rawdata/` and EDA reports generated + independently QA'd. Phase not formally closed yet (no close-out checklist run, no human sign-off on findings).
+**2026-07-09** — Phase 1 (curate 3 datasets + EDA) fully executed, not yet formally closed. On top of that, human pulled forward the previously-deferred dataset-merging item: built + EDA'd 4 combined variants (D1-D4). See `spec/spec.md` "Revision 2026-07-09".
 
 ## Current position
 
-**Phase:** Phase 1 plan fully executed (`dax-state/plan-phase1.md`, all rows `done`). Deliverables: `rawdata/{ppi,avida,mlaep}/` (gitignored, each with `SOURCE.md`) + `docs/eda-{ppi,avida,mlaep}.md` + `docs/figures/*.png` (10 figures) + `docs/phase1_eda_walkthrough.ipynb` (executed notebook, incl. PLM-readiness section) + `docs/phase1_eda_summary.md` (consolidated cross-dataset report, incl. §3.1 length-confound remediation steps) + `docs/phase1_eda_summary.html` (designed standalone report, also published as a Claude Artifact). Scripts in `src/spikes/eda_{ppi,avida,mlaep}.py` (not promoted — hardcoded paths/dates, promotion deferred to phase close).
+**Phase 1 deliverables:** `rawdata/{ppi,avida,mlaep}/` (gitignored, each with `SOURCE.md`) + `docs/eda-{ppi,avida,mlaep}.md` + `docs/figures/*.png` + `docs/phase1_eda_walkthrough.ipynb` (executed) + `docs/phase1_eda_summary.md`/`.html` (consolidated report, also a Claude Artifact). Not formally closed (no close-out checklist run yet).
 
-**Key EDA findings:** PPI positive fraction fixed at ~9.09% (1:10 sampling) across all species; AVIDa hIL6 3.66% / hTNFa 12.22% positive; MLAEP ACE2-bind 8.05% + 8 per-antibody-clone escape fractions (4.1–18.2%). **PLM-readiness (human plans to use a PLM downstream):** (1) **100% of PPI's `human_test` proteins already appear in `human_train`** (by ID and exact sequence) — verified fact, but framing corrected after human pushback: this is very likely an intentional pair-level/interactome-completion split (D-SCRIPT's real generalization claim is cross-species transfer via mouse/fly/yeast/worm/ecoli), not a benchmark flaw. Only matters if downstream work needs a novel-*human*-protein-specific generalization claim, which would need a custom protein-disjoint split; (2) PPI positive fraction is confounded with pair length (0.165 shortest decile vs ~0.07-0.08 mid-range vs 0.103 longest); (3) all sequences within PLM context limits; (4) PPI has `U`/`X` residues in ~0.1-0.3% of seqs. Full findings in `dax-state/runs/phase1-{1,2,3,4,notebook}.md` and `docs/phase1_eda_summary.md`.
+**Combined-dataset deliverables (new):** `rawdata/combined/{d1_ppi,d2_avida,d3_ppi_avida,d4_heldout_mlaep_ace2}.csv` (gitignored, `SOURCE.md` present) + `docs/eda-combined.md`. D1=D-SCRIPT PPI (716,517 rows), D2=AVIDa no-COVID (579,471), D3=D1∪D2 training pool (1,295,988), D4-heldout=MLAEP reframed as (RBD_mutant, human_ACE2, ace2_bind) (19,132), kept separate from D3 by design (held-out eval, not merged into training). Built by `src/spikes/build_combined_datasets.py` + `eda_combined.py`.
+
+**Key findings (Phase 1):** PPI positive fraction fixed ~9.09% (1:10 sampling); AVIDa hIL6 3.66%/hTNFa 12.22%; MLAEP ACE2-bind 8.05%. PLM-readiness: PPI human train/test shares 100% of proteins (pair-level split by design, not a flaw — see corrected framing in journal); PPI positive fraction confounded with pair length (remediation steps in `docs/phase1_eda_summary.md` §3.1); all seqs within PLM context limits; PPI has U/X in ~0.1-0.3% of seqs.
+
+**Key findings (combined D1-D4):** D4's held-out set is verified genuinely clean — zero sequence overlap with the D3 training pool in either direction. 1 sequence (human TNF-alpha) shared between D1/D2 (not a leakage concern). D4 held-out has zero length variance (RBD mutants constant 201aa, ACE2 constant 805aa — 5aa past D1's 800aa training cap). `seq_a`/`seq_b` column semantics differ by `pair_type` in D3 (symmetric in PPI rows, asymmetric antibody/antigen in AVIDa rows) — worth an explicit role column if the downstream architecture needs it. Full detail in `dax-state/runs/combined-datasets-2026-07-09.md` and `docs/eda-combined.md`.
 
 **Recent commits:**
-- (pending) — Add §3.1 length-confound remediation steps + docs/phase1_eda_summary.html report.
-- `f43578e` — Correct train/test overlap framing per human pushback.
+- (pending) — Build D1-D4 combined datasets + EDA.
+- `721abcf` — Add §3.1 length-confound remediation steps + docs/phase1_eda_summary.html report.
 
 ## Next action
 
-1. **Human review** of the 3 EDA reports (`docs/eda-*.md`) and findings.
-2. If satisfied: run the Phase 1 **close-out checklist** (`../dax/phase-lifecycle.md`) — promotion pass, phase-summary run-note, decisions/session-handoff rewrite, `[phase1-done]` commit.
-3. Then scope the downstream modeling task (deferred in spec) and open Phase 2.
+1. **Human review** of `docs/eda-combined.md` and the combined-dataset design (esp. the `seq_a`/`seq_b` role-asymmetry note).
+2. Decide whether D3/D4 are inputs to an actual PLM fine-tuning run next, or whether more EDA/variants are wanted first.
+3. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — promotion pass, phase-summary run-note, `[phase1-done]` commit — still outstanding, deferred while this combined-dataset work was prioritized.
 
 ## Open blockers
 
