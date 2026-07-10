@@ -1,9 +1,9 @@
 # dax-gen_project: curate three independent sequence-interaction datasets (PPI, antibody-antigen, viral antigenic evolution) and characterize each via EDA
 
 ## Current state
-**Last updated:** 2026-07-09
-**Load-bearing as of this date:** Phase 1 (curate 3 datasets + EDA) executed. Human has now requested dataset combinations (D1-D4, see Revision below) ahead of the originally-deferred merging item — in progress.
-**What's new since last update:** See "Revision 2026-07-09" at bottom — D1/D2/D3/D4 combined-dataset definitions.
+**Last updated:** 2026-07-10
+**Load-bearing as of this date:** Phase 1 (curate 3 datasets + EDA + D1-D4 combinations + length-only baseline) complete, not yet formally closed. Phase 2 (PLM baseline modeling) now open — see "Revision 2026-07-10" below.
+**What's new since last update:** Phase 2 opened: M1 (frozen ESM-C 300M + MLP head) pipeline built + CPU-smoke-tested on D1; real GPU training run not yet started (pending GPU allocation approval).
 
 ## Goal
 
@@ -82,6 +82,21 @@ Human requested 4 combined-dataset variants, ahead of the "any merging/unificati
 - **D4** = D3 as the training pool, with MLAEP reframed as a **held-out evaluation partition** (not merged into training rows): each of the 19,132 RBD mutants in `GMM_covid_info_seq.csv` is paired with the human ACE2 receptor sequence (fetched from UniProt Q9BYF1) using the `ace2_bind` column as the label — a genuine PPI-shaped row (viral RBD ↔ host receptor), used only to evaluate whether a model trained on D3 (zero viral data) generalizes to viral antigen binding.
 
 This narrows/operationalizes the previously-deferred "Any merging/unification of the three datasets into a common schema" item — decided now rather than left fully open. See `dax-state/journal.md` for build details and `dax-state/runs/` for the run-note.
+
+---
+
+## Revision 2026-07-10 — Phase 2 opened: PLM baseline modeling (M1 on D1)
+
+Phase 2 goal: establish a first PLM-based baseline model ("M1": frozen ESM-C 300M backbone + a small trainable MLP head over mean-pooled per-protein embeddings) on **D1** (D-SCRIPT PPI), and compare it against the Phase 1 length-only baseline (`docs/length_baseline_results.md`, D1 AUROC 0.652) using the stratified-reporting requirement from `docs/phase1_eda_summary.md` §3.1.
+
+Deliverables:
+1. **M1-on-D1 pipeline** — data prep (dedup + bad-residue filtering per §2.1's requirement), model, train, eval scripts. **Done** (`src/spikes/phase2/{data_prep,model,train_m1,evaluate}.py`), CPU-smoke-tested end-to-end (loss decreases monotonically over 8 epochs, both scripts exit 0). See `dax-state/runs/phase2-m1-d1-pipeline.md`.
+2. **Real training run** on the full curated D1 (419,916 train / 52,424 test rows) — requires a GPU allocation (est. 1x A6000, `singhlab-gpu`, ~15-30 min compute / 1hr walltime ask). **Not started** — GPU allocation must be requested and approved by the human before submission (no autonomous GPU allocation, per Manifesto + `rohit-dcc-onnode`).
+3. **Evaluation report** — aggregate AUROC/AUPRC plus the length-decile-stratified table (per §3.1) versus the length-only floor. **Not started.**
+
+Acceptance criteria: the pipeline runs end-to-end on a real GPU allocation against the full curated D1 data (not just the CPU smoke subset); the evaluation report includes both the aggregate metric and the length-stratified breakdown, explicitly compared to the 0.652 AUROC length-only floor.
+
+Note: deliverable 1 was actually built in a prior session without a formal phase-open (no `plan-phase2.md` existed yet at the time). This revision retroactively formalizes it per Manifesto §6. See `dax-state/decisions.md` for the one autonomous technical decision made during that build (ESM-C checkpoint loader workaround).
 
 <!--
 Spec-writing notes (per `../dax/agent-configs/spec-writer.md` + Legislation §3):

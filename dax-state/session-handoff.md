@@ -4,47 +4,41 @@
 
 ## Last updated
 
-**2026-07-09** — Human reviewed `docs/length_baseline_results.md` interactively (validity of the length-only baseline, D1 vs D2 mechanisms, whether resampling could fix the confound). Follow-up checks run and verified via `src/spikes/length_confound_followup.py`: D1's length confound is a curation/ascertainment-bias artifact that rebalancing does *not* fix; D2-hIL6's length signal is real biology (survives a clone-disjoint re-split), not split leakage. `docs/phase1_eda_summary.md` updated in 5 places accordingly. See `dax-state/runs/length-baseline-review-2026-07-09.md`.
+**2026-07-10** — Formalized Phase 2 opening. A prior session had already built and CPU-smoke-tested a full M1-on-D1 pipeline (`src/spikes/phase2/`) without going through the phase-open protocol (no spec section, no plan, uncommitted). This session backfilled `spec/spec.md` (Revision 2026-07-10), created `dax-state/plan-phase2.md`, backfilled `journal.md` + `decisions.md`, removed a stray empty file (`src/spikes/phase2/untitled.py`), and committed.
 
 ## Current position
 
-**Phase 1 deliverables:** `rawdata/{ppi,avida,mlaep}/` (gitignored, each with `SOURCE.md`) + `docs/eda-{ppi,avida,mlaep}.md` + `docs/figures/*.png` + `docs/phase1_eda_walkthrough.ipynb` (executed) + `docs/phase1_eda_summary.md`/`.html` (consolidated report, also a Claude Artifact). Not formally closed (no close-out checklist run yet).
+**Phase 1** deliverables complete (`rawdata/{ppi,avida,mlaep}/`, `docs/eda-*`, `docs/phase1_eda_summary.md`, D1-D4 combined datasets, length-only baseline + confound follow-up). Not formally closed — no close-out checklist run yet (deferred while Phase 2 work was prioritized).
 
-**Combined-dataset deliverables:** `rawdata/combined/{d1_ppi,d2_avida,d3_ppi_avida,d4_heldout_mlaep_ace2,d4_heldout_mlaep_antibodies}.csv` (gitignored, `SOURCE.md` present) + `docs/eda-combined.md`/`.html` (also a Claude Artifact). D1=D-SCRIPT PPI (716,517 rows), D2=AVIDa no-COVID (579,471), D3=D1∪D2 training pool (1,295,988). D4 held-out has two axes (ACE2: 19,132 rows; 8-antibody escape panel: 153,056 rows), both verified zero-overlap with D3.
-
-**Length-only baseline (`docs/length_baseline_results.md`):** D1 AUROC 0.652, D2-hIL6 **0.803** (stronger than PPI), D2-hTNFa 0.762 (small n, more variance) — all clear a random floor by a real margin.
-
-**Length-confound follow-up (this session, `dax-state/runs/length-baseline-review-2026-07-09.md`):**
-- D1: confound = ascertainment bias (positive-associated proteins longer/higher-degree than negative-only ones); length ⊥ hub-degree (r=-0.066); **rebalancing (random or length-matched) does not remove it** — tested, AUROC unchanged (0.652/0.651/0.653).
-- D2-hIL6: confound = real biology (CDR3-length-149 promiscuity, 3,351 distinct clones, 31.8% vs 10.1% population posrate); **confirmed via clone-disjoint re-split** (AUROC 0.809 vs 0.803 original, unchanged) — not split leakage, should not be "corrected."
-- Actionable mitigations now in `docs/phase1_eda_summary.md`: §3.1 stratified-reporting requirement (required, not optional), §2.1 dedup requirement (`human_test` 89 exact train-dupes; `ecoli_test` 3,761 within-file dupes), §6 rec #7.
-
-**Recent commits:**
-- (pending) — This session's `docs/phase1_eda_summary.md` edits + `src/spikes/length_confound_followup.py` + run-note + journal/handoff sync.
-- `2e7ccbe` — Add length-only baseline for D1 (PPI) and D2 (AVIDa).
-- `64484a9` — Add docs/eda-combined.html companion report.
+**Phase 2** (`dax-state/plan-phase2.md`) now open. Goal: first PLM baseline model ("M1" = frozen ESM-C 300M + MLP head) on D1, compared against the 0.652 AUROC length-only floor.
+- Step 1 (pipeline build + CPU smoke test): **done**. `src/spikes/phase2/{data_prep,model,train_m1,evaluate}.py`; curated D1 = 419,916 train / 52,424 test rows (dedup + bad-residue filtered); smoke run passed end-to-end. See `dax-state/runs/phase2-m1-d1-pipeline.md`.
+- Step 1-qa: **partial** — self-verified in the run-note (independent re-derivation of key counts), no separate qa-executor dispatch yet.
+- Step 2 (real GPU training run, full curated D1): **not started** — blocked on human approval to request a GPU allocation.
+- Step 3 (evaluation report, length-stratified): **not started**.
 
 ## Next action
 
-1. Decide whether D3/D4 become inputs to a PLM fine-tuning run next (with the length-only floor + stratified-reporting requirement as mandatory comparisons), or whether more EDA is wanted first.
-2. If/when a modeling phase starts: implement the two dedup steps (`docs/phase1_eda_summary.md` §2.1) in the data loader, and check whether `ecoli_test`'s removed duplicate rows are label-skewed before trusting any cross-species metric.
-3. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — promotion pass (`length_baseline.py` + `length_confound_followup.py` are still `src/spikes/`, study code), phase-summary run-note, `[phase1-done]` commit — still outstanding, deferred while combined-dataset/baseline work was prioritized.
+1. **Human decision needed:** approve requesting a GPU allocation for Phase 2 step 2 (`singhlab-gpu`, 1x A6000, est. ~15-30 min compute / 1hr walltime ask — see resource estimate in `dax-state/runs/phase2-m1-d1-pipeline.md`).
+2. Once approved: submit the real M1-on-D1 training run via `sbatch` (there's already a draft `src/spikes/phase2/run_full_m1_d1.sbatch` — review before submitting, it predates this formalization pass and hasn't been checked this session).
+3. After training: build the evaluation report (step 3) — aggregate AUROC/AUPRC + length-decile-stratified table vs. the length-only baseline, per `docs/phase1_eda_summary.md` §3.1.
+4. Independent QA-executor pass on step 1 (currently only self-verified) — can happen in parallel with step 2.
+5. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — still outstanding, deferred.
 
 ## Open blockers
 
-None.
+- Phase 2 step 2 needs human approval before a GPU allocation is requested (see Next action #1).
 
 ## DCC state
 
-Not in use for Phase 1 (fetch + EDA + follow-up analysis is CPU/IO-bound; no GPU compute needed). Revisit once a downstream modeling task is scoped.
+Currently on a CPU-only `sys/dashboard` job (`common` partition, no GPU) — fine for planning/doc work, not for step 2. No GPU allocation held.
 
 ## WSL / local state
 
 - **Repo:** `/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/` on `main`, pushed to `github.com:ethomas4737/dax-gen_project` (origin). Harness at sibling `../dax/` (pinned SHA in `dax-state/pinned-dax-sha.txt`).
-- **Pending changes:** this session's doc edits + new spike script + run-note + journal, about to be committed.
+- **This session's commit:** `[phase2-open]` — spec revision, plan-phase2.md, journal/decisions backfill, session-handoff rewrite, stray-file cleanup.
 
 ## Recovery recipe
 
-`git status` + `tail -10 dax-state/journal.md`.
+`git status` + `tail -15 dax-state/journal.md` + read `dax-state/plan-phase2.md`.
 
-**Project-specific recovery steps:** none yet — add env activations, checkpoint paths, etc. as the project develops.
+**Project-specific recovery steps:** before touching `src/spikes/phase2/run_full_m1_d1.sbatch`, review it — it was drafted before this session's formalization pass and its contents haven't been checked against the plan above.
