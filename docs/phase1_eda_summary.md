@@ -9,7 +9,7 @@
 ## TL;DR
 
 1. **PPI's human train/test split is pair-level, not protein-level — worth knowing before making generalization claims.** 100% of `human_test`'s proteins (by ID and by exact sequence) already appear in `human_train`. This is very likely intentional (D-SCRIPT's actual generalization claim is cross-species transfer, tested via the mouse/fly/yeast/worm/ecoli files, not this split) — but it means the human split itself demonstrates generalization to new *pairings* of known proteins, not to novel proteins. Only matters if you plan to claim novel-protein generalization specifically. 89/52,725 test pairs (0.17%) are also exact train-pair duplicates, a plain data-quality note regardless of split design. See §2.
-2. **PPI's positive fraction is also confounded with sequence length**, not just species. A real shortcut-learning risk for a length-sensitive model. See §3.
+2. **Both PPI's and AVIDa-hIL6's positive fractions are confounded with sequence length** — a real shortcut-learning risk for a length-sensitive model. PPI: length-only AUROC 0.652. AVIDa-hIL6: **stronger**, AUROC 0.803, confirmed genuine (survives a clone-disjoint re-split; not antigen confounding or noise). See §3.
 3. **Class balance is engineered, not biological, for two of three datasets.** PPI is fixed at ~9.09% positive across every species (a 1:10 sampling ratio baked into the D-SCRIPT benchmark). AVIDa varies substantially by antigen (1.1%–13.7% for hIL6's 31 variants).
 4. **All exclusions hold**, independently re-verified: 0 COVID/coronavirus hits in the PPI dataset (plus only one negligible non-functional pseudogene antibody-gene hit, kept per your call); 0 SARS-CoV-2 rows in either AVIDa file.
 5. **No PLM context-window issues** — every sequence across all three datasets is well under the ~1022-residue limit common to ESM-2/ESM-1b/ProtBert (max is 800aa, in PPI).
@@ -42,6 +42,15 @@ The question: does `human_test.tsv` contain proteins a model would already have 
 
 This check only applies to human (the only species with both a train and test file).
 
+### 2.1 How to address it (train/test duplicate rows)
+
+Two distinct duplicate-row issues — unrelated to the length confound in §3; deduplication does **not** address that (see §3.1).
+
+1. **Required: drop `human_test`'s 89/52,725 (0.17%) exact train-pair duplicates before scoring.** These rows are identical `(protein_a, protein_b, label)` triples already seen in `human_train` — literal, if small, leakage. Fix: anti-join `human_test` against `human_train` on the full pair+label before evaluating any model.
+2. **Required: dedupe `ecoli_test`'s 3,761/22,000 (~17%) within-file duplicate rows before scoring.** Not train/test leakage (ecoli has no train file) — it's redundant rows within the same test file, inflating the apparent sample size (22,000 vs. ~18,239 unique) and potentially skewing aggregate metrics if the duplicated rows lean toward one label. This one matters more than human's case, since `ecoli_test` is the file D-SCRIPT's actual cross-species generalization claim (above) gets evaluated on. Check whether the removed duplicates are label-skewed before trusting a metric computed on the deduplicated file.
+
+Both are load-time filters for the eventual modeling-phase data loader, not edits to `rawdata/ppi/` itself — per project convention, raw data is never modified after the initial download.
+
 ---
 
 ## 3. The length-confound finding (PPI)
@@ -52,15 +61,15 @@ Positive fraction is flat at ~9.09% across species (by construction), but **not 
 
 **Why this matters:** if you train a PLM-based classifier on this data, embeddings correlate with sequence length in ways a model can exploit as a shortcut — i.e. it could partly learn "short-or-long pair → predict positive" instead of real interaction signal, and look like it's performing well while actually just recovering this artifact. Concretely: hold out a length-stratified validation split, and/or benchmark against a length-only baseline (e.g. logistic regression on `(len_a, len_b)` alone) to know how much of any future model's performance the length shortcut alone can explain.
 
-AVIDa-hIL6 shows a superficially similar by-length pattern, but it's noisy/non-monotonic rather than a clean trend — more likely confounded with antigen identity (which already varies 1.1–13.7% independent of length) than a genuine length effect. Lower-confidence finding, flagged for awareness rather than as a confirmed risk.
+**AVIDa-hIL6 shows a real length effect too — stronger than PPI's, and confirmed genuine, not antigen confounding or noise.** A length-only baseline (`docs/length_baseline_results.md`) scores AUROC 0.803 on hIL6 (vs. PPI's 0.652). This is not an artifact: VHH clones of length 149aa (3,351 distinct clones, not a handful of repeats) are broad binders at 31.8% vs. a 10.1% population-wide rate — a genuine ~3x enrichment, most likely reflecting CDR3-length-linked binding promiscuity (a known antibody-biology phenomenon). It survives a clone-disjoint re-split (AUROC 0.809, unchanged) — ruling out train/test clone leakage as the explanation. Antigen identity (which independently varies 1.1–13.7%) is a separate covariate, not the cause of this length effect.
 
 ### 3.1 How to address it
 
-Roughly in order of effort — steps 1–2 are the necessary minimum (diagnose before treating); step 3 is the usual fix if the baseline in step 1 explains a meaningful chunk of variance:
+Steps 1–2 are required for any future model on this data; step 3 was tested this phase and found unreliable — step 2 (stratified reporting), not rebalancing, is the primary gate:
 
-1. **Quantify it — build a length-only baseline.** Train the simplest possible classifier using *only* `(len_a, len_b)` (or their sum/product) as features. Whatever AUROC/AUPRC that gets is the floor: if a PLM-based model doesn't clear it by a meaningful margin, it isn't learning much beyond length. Cheap to run, and the standard sanity check for shortcut confounds.
-2. **Report performance stratified by length bin** (the same bins used for the positive-fraction check). A model that only does well in the short/long extremes — where positive rate is already inflated — is diagnostic of length-shortcut learning rather than real signal.
-3. **Rebalance so length stops correlating with the label** — either resample to match length distributions between positive and negative pairs, or use importance/inverse-propensity weighting during training to downweight the "easy" length-confounded examples.
+1. **Quantify it — build a length-only baseline.** Train the simplest possible classifier using *only* `(len_a, len_b)` (or their sum/product) as features. Whatever AUROC/AUPRC that gets is the floor: if a PLM-based model doesn't clear it by a meaningful margin, it isn't learning much beyond length. Done — see `docs/length_baseline_results.md` (D1 AUROC 0.652; D2-hIL6 0.803; D2-hTNFa 0.762).
+2. **Required: report performance stratified by length bin** (the same bins used for the positive-fraction check), for every future model, not as an optional diagnostic. A model that only beats the length-only floor in aggregate but shows no lift *within* each length stratum is not learning past the confound, regardless of its overall AUROC/AUPRC.
+3. **Rebalance so length stops correlating with the label** — either resample to match length distributions between positive and negative pairs, or use importance/inverse-propensity weighting during training. *Tested empirically on D1: random 1:1 undersampling and length-decile-matched undersampling both left the length-only AUROC unchanged (0.652 → 0.651 → 0.653).* The confound lives at the level of individual protein identity (positive-associated proteins run longer/higher-degree than negative-only proteins), not aggregate pair length, so simple rebalancing is not a reliable fix — don't rely on this step; use step 2 instead. Separately, for D2-hIL6 the length signal was confirmed to be genuine CDR3-length-linked binding promiscuity (survives a clone-disjoint re-split, AUROC 0.809 vs. 0.803) rather than an artifact — rebalancing it away would delete real biology, not correct a flaw.
 4. **Keep the length-only baseline as a permanent reporting companion**, not a one-time check — report it alongside every future model result.
 5. **(More involved) Adversarial/invariance training** — add a head that tries to predict length from the embedding and train the main model to make it fail, if the baseline in step 1 turns out to be uncomfortably strong. Usually only needed if steps 1–4 aren't enough.
 
@@ -73,7 +82,7 @@ Roughly in order of effort — steps 1–2 are the necessary minimum (diagnose b
 | Check | Result |
 |---|---|
 | Train/test protein overlap | **PPI: 100% of test proteins already seen in train (§2)** — a pair-level split by design, not a flaw. Affects how novel-protein-generalization claims (specifically) should be interpreted. |
-| Label vs. length confound | **PPI: real, §3.** AVIDa-hIL6: noisier, likely antigen-confounded. Not applicable to MLAEP's fixed-length mutants. |
+| Label vs. length confound | **PPI: real, §3.** **AVIDa-hIL6: real, and stronger than PPI (AUROC 0.803 vs. 0.652) — confirmed via clone-disjoint re-split, not antigen confounding or noise.** Not applicable to MLAEP's fixed-length mutants. |
 | Context window (~1022 residue common limit) | **Clear everywhere** — max is 800aa (PPI), 201aa (MLAEP RBD), 179aa (AVIDa VHH). No truncation strategy needed. |
 | Non-standard residues (`X`, `U`, `B`, `Z`, gaps) | AVIDa and MLAEP: **fully standard-alphabet**. PPI: `U`/`X` present in human (221/70,529 seqs), mouse (217/40,606), fly (8/19,310), worm (1/25,930); yeast/ecoli clean. Likely fine with modern PLM tokenizers, but worth confirming against the specific tokenizer used. |
 
@@ -97,6 +106,7 @@ Roughly in order of effort — steps 1–2 are the necessary minimum (diagnose b
 4. **Confirm PLM tokenizer handling of `U`/`X`** before committing to a specific pretrained PLM, since PPI is the dataset affected.
 5. **AVIDa's per-antigen positive-fraction variation (1.1–13.7%)** suggests antigen identity is a meaningful covariate — worth deciding whether the downstream task treats antigens jointly (pooled) or separately (per-antigen models/evaluation).
 6. Datasets remain intentionally unmerged per spec — nothing above argues for merging them, but the shared PLM-readiness lens (context window, vocabulary, split design) is a useful frame if a future phase builds a shared embedding pipeline across all three.
+7. **Dedupe PPI's train/test duplicate rows before any real evaluation** — `human_test`'s 89 exact train-pair duplicates and `ecoli_test`'s 3,761 within-file duplicate rows (§2.1) both need handling at load time; neither is addressed by the length-confound mitigation above.
 
 ---
 
