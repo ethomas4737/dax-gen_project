@@ -4,41 +4,51 @@
 
 ## Last updated
 
-**2026-07-10** — Corrected Phase 2's scope. It's actually a **9-run matrix** (3 models M1/M2/M3 × 3 datasets D1/D2/D3, with D4 held-out for eval on all 9) — this had been discussed in an earlier conversation that never landed in this project's durable state, so it was invisible until the human raised it directly this session. `spec/spec.md` (Revision 2026-07-10b) and `dax-state/plan-phase2.md` have been rewritten to the corrected scope and are **awaiting human approval to execute** past step 0. Also: job 49561386 (the single M1-on-D1 GPU run from earlier this session) failed on its own (dirty-repo guard working as intended, no compute wasted) and needs redoing anyway once D1's curation is extended to all 6 species — the pipeline built so far only covers the human-species subset.
+**2026-07-10, ~13:20** — Full rewrite (prior version was stale by ~3h: steps 1/4/5/6 had completed and gone uncaptured). Since the last handoff: implemented M2/M3/train_frozen.py/train_lora.py/evaluate.py (steps 1,4,5,6); human then decided (a) cross-species PPI is internal-eval-only, never trained on, (b) validation monitoring during training must come from a fresh 90/10-stratified split carved out of `human_train` (not `human_test`), (c) **D4 (RBD-ACE2 + antibody escape) is the headline/primary metric**, not a secondary check. This reopened steps 1 (new step 1c) and 6. An executor is currently implementing both, mid-flight (not yet committed). Also verified D4 needs no further data cleaning (0 dupes, 0 non-standard residues, 0 nulls on both axes) — one real, already-documented caveat stands: ACE2's 805aa sequence is 5aa past D1's 800aa training-length cap (`docs/eda-combined.md`), a compatibility point for step 7's eval harness, not a cleaning issue.
 
 ## Current position
 
-**Phase 1** deliverables complete (`rawdata/{ppi,avida,mlaep}/`, `docs/eda-*`, `docs/phase1_eda_summary.md`, D1-D4 combined datasets, length-only baseline + confound follow-up). Not formally closed — no close-out checklist run yet (deferred while Phase 2 work was prioritized).
+**Phase 1** deliverables complete. Not formally closed — close-out checklist still deferred.
 
-**Phase 2** (`dax-state/plan-phase2.md`) — 13-row plan (steps 0-10, with 8/9 split into a/b). All 5 open decisions **resolved** 2026-07-10. **Near-term scope narrowed 2026-07-10:** human is weighing alternatives to D2 and doesn't want D2/D3 work started — focus is the 3 D1-only runs (M1/M2/M3 × D1) first; steps 2, 3, 8b, 9b are **deferred**, not cancelled.
-- Step 0 (M1 pipeline scaffold + CPU smoke test, human-species D1 subset only): **done**, but superseded — real D1 curation (step 1) needs all 6 species.
-- Steps 1, 4, 5, 6, 7, 8a, 9a, 10 (D1 full-species curation → M2 attention-pooling → M3 LoRA-wrapped backbone → train_frozen.py/train_lora.py → D4 held-out harness → 3 D1 training runs → D4 eval on those 3 → eval report): **not started**, unblocked, ready to execute pending final go-ahead.
-- Steps 2, 3, 8b, 9b (D2/D3 curation + the 6 D2/D3 training runs + their D4 eval): **deferred**.
+**Phase 2** (`dax-state/plan-phase2.md`) — D4 is now the framing objective; D1 training + cross-species eval exist in service of it.
+- Steps 0, 1, 4, 5: **done**.
+- Step 1b (cross-species PPI as internal held-out eval, confirmed non-training): **not started**.
+- Step 1c (carve 90/10 stratified val split from `human_train`) + step 6 (reopened — add real per-epoch val-loss/AUROC monitoring to `train_frozen.py`/`train_lora.py`): **in progress**, executor dispatched this session, currently running a CPU smoke-test job (`49568082 phase2-smoke6`) validating all 6 train+eval combinations against the new split. Uncommitted diff touches `data_prep.py`, `evaluate.py`, `model.py`, `train_frozen.py`, `train_lora.py`, `plan-phase2.md`, + new `make_synthetic_short_seqs.py`.
+- Steps 7 (D4 eval harness), 8a (3 D1-only GPU runs), 9a, 10: **not started**.
+- Steps 2, 3, 8b, 9b (D2/D3): **deferred**, not cancelled.
 
 ## Next action
 
-1. **Human go-ahead needed** to start executing steps 1/4/5 (can run in parallel — no interdependency between D1 curation, M2, and M3 builds).
-2. Build order for the D1-only near-term scope: step 1 (D1 full-species curation) + step 4 (M2) + step 5 (M3, incl. a quick `peft`-vs-ESM-C compatibility check) in parallel → step 6 (train_frozen.py/train_lora.py) → step 7 (D4 harness) → step 8a (3 GPU training runs, human approval needed per allocation) → step 9a (D4 eval) → step 10 (D1-only eval report).
-3. Independent QA-executor pass on step 0/1's dedup+filter logic is still outstanding regardless of sequencing.
-4. D2/D3 work (steps 2, 3, 8b, 9b) resumes once the D2 dataset question is settled — no action needed there for now.
-5. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — still outstanding, deferred.
+1. **Wait for the in-flight executor** (steps 1c/6) to finish, smoke-pass, and commit. Check `git log` / `squeue -u $USER` for job `49568082` completion.
+2. Once landed: step 1b (cross-species curation) and step 7 (D4 eval harness — data already confirmed clean) are both unblocked and parallelizable.
+3. Step 8a (3 GPU training runs) still needs explicit human approval before each allocation request.
+4. Step 1-qa (independent QA on step 0/1's dedup+filter logic) remains outstanding, unscheduled.
+5. D2/D3 (steps 2, 3, 8b, 9b) resume once the human's D2-alternatives decision lands — no action needed now.
+6. Eventually: Phase 1 close-out checklist — still outstanding, deferred.
 
 ## Open blockers
 
-- Phase 2 needs a final human go-ahead to start executing (Article 1) — see Next action #1.
-- D2/D3 portions (steps 2, 3, 8b, 9b) on hold pending the human's D2-alternatives decision (not currently being worked).
+- Step 8a needs human approval before each GPU allocation request.
+- D2/D3 portions on hold pending the human's D2-alternatives decision.
+- Step 7 (when built) must confirm the eval harness doesn't silently mishandle ACE2's 805aa sequence (5aa past D1's 800aa training cap).
 
 ## DCC state
 
-No GPU allocation currently held. Job 49561386 (single M1-on-D1 run, human-species-only D1) FAILED by design (dirty-repo guard) and is superseded by the corrected plan above — do not resubmit it as-is. Currently on a CPU-only `sys/dashboard` job (`common` partition) coordinating this work.
+No GPU allocation held. Two CPU jobs running (`common` partition): `49561144` (`sys/dashboard`, ~3.5h in, coordinating this session) and `49568082` (`phase2-smoke6`, started 13:15, 30-min budget, validating the executor's steps 1c/6 work).
 
 ## WSL / local state
 
-- **Repo:** `/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/` on `main`, pushed to `github.com:ethomas4737/dax-gen_project` (origin). Harness at sibling `../dax/` (pinned SHA in `dax-state/pinned-dax-sha.txt`).
-- **This session's commit:** `[phase2-open]` — spec revision, plan-phase2.md, journal/decisions backfill, session-handoff rewrite, stray-file cleanup.
+- **Repo:** `/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/` on `main`, on-cluster (this session runs directly on DCC, node `dcc-core-ferc-u-ab39-5-4`). Origin: `github.com:ethomas4737/dax-gen_project`.
+- **4 commits ahead of `origin/main`**, not pushed: `[phase2-rescope]`, `[phase2-decisions]` (5 open decisions), `[phase2-narrow]`, `[phase2-1-4]`, `[phase2-5]`, `[phase2-6]` ×2, `[phase2-decisions]` (val-split/D4-objective). *(exact list: `git log --oneline -8`)*
+- **Uncommitted right now:** the in-flight executor's steps 1c/6 diff (see Current position) — do not assume `plan-phase2.md`'s on-disk state matches its last-committed version until that lands.
 
 ## Recovery recipe
 
-`git status` + `tail -15 dax-state/journal.md` + read `dax-state/plan-phase2.md`.
+```
+git status --short --branch
+git log --oneline -8
+squeue -u $USER                      # check job 49568082 (smoke test) status
+tail -15 dax-state/journal.md
+```
 
-**Project-specific recovery steps:** before touching `src/spikes/phase2/run_full_m1_d1.sbatch`, review it — it was drafted before this session's formalization pass and its contents haven't been checked against the plan above.
+Read `dax-state/plan-phase2.md` steps 1c/6 rows once the executor's commit lands, and `dax-state/decisions.md`'s 2026-07-10 val-split entry for full rationale before touching training scripts.
