@@ -30,7 +30,7 @@
 
 ## DCC state
 
-Currently on a CPU-only `sys/dashboard` job (`common` partition, no GPU) — fine for planning/doc work, not for step 2. No GPU allocation held.
+**Job 49561386** — real M1-on-D1 training run, `singhlab-gpu` (1x A6000), submitted 2026-07-10, 1hr walltime cap (est. actual ~15-30 min). Output: `runs/phase2_m1_d1/full/slurm-49561386.out`. Check with `squeue -j 49561386` or `sacct -j 49561386 -o JobID,State,Elapsed,MaxRSS,ExitCode`. Separately: a CPU-only `sys/dashboard` job (`common` partition) is the interactive session this work is being coordinated from.
 
 ## WSL / local state
 
