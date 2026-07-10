@@ -16,8 +16,12 @@ Architecture (per spec):
     pass wrapped in torch.no_grad()). Only the head is trained -- pooling is
     non-parametric mean-pooling, so there is nothing to train there.
   - Backbone trainability (frozen vs LoRA-wrapped, for M3) and pooling strategy
-    (mean vs attention, for M2) are kept as separate, swappable pieces on purpose;
-    only the M1 frozen + mean-pool path is implemented/exercised right now.
+    (mean vs attention, for M2) are kept as separate, swappable pieces on purpose.
+    M1 (frozen + mean-pool) and M2 (frozen + attention-pool, AttnPooling) are both
+    implemented; M3 (LoRA-wrapped trainable backbone) is not yet built.
+    Note: M2's attention-pooling is trainable, so M1's embed-once-cache-forever
+    trick (build_embedding_cache / cache_to_matrix, below) does not carry over to
+    M2 as-is -- see AttnPooling's docstring.
 
 Known environment workaround: this DCC login node enforces a 2GB per-process RSS
 ulimit. `esm`'s stock `ESMC.from_pretrained(...)` loader (via
@@ -110,19 +114,30 @@ class MeanPooling(nn.Module):
 
 
 class AttnPooling(nn.Module):
-    """Attention-pooling stub for M2. Not implemented / not exercised in this pass --
-    kept here only so the `pooling` argument has a second concrete class to swap in
-    later without restructuring PairClassifier."""
+    """Learned single-query attention-pooling over valid (non-pad) residue positions (M2).
+
+    A single Linear(d_model, 1) scores each residue position; padding positions are
+    masked to -inf before softmax so they contribute zero weight. Unlike M1's
+    MeanPooling, this has trainable parameters (`self.score`) -- callers must include
+    `pooling.parameters()` in the optimizer alongside the head's, and M1's
+    embed-once-cache-forever trick (build_embedding_cache / cache_to_matrix) does NOT
+    apply as-is to M2: since pooling itself is trained, a cached *pooled* vector goes
+    stale as soon as `self.score`'s weights update. M2's cache should instead hold
+    each unique protein's per-residue backbone hidden states (the frozen backbone's
+    output, before pooling) and apply this module fresh every step -- see
+    dax-state/plan-phase2.md step 6.
+    """
 
     def __init__(self, d_model: int):
         super().__init__()
-        self.d_model = d_model
-        raise NotImplementedError(
-            "AttnPooling (M2) is a structural stub only -- not implemented in the M1 pass."
-        )
+        self.score = nn.Linear(d_model, 1)
 
     def forward(self, hidden_states: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
+        # hidden_states: [B, L, D], mask: [B, L] boolean, True = valid residue
+        scores = self.score(hidden_states).squeeze(-1)  # [B, L]
+        scores = scores.masked_fill(~mask, float("-inf"))
+        weights = torch.softmax(scores, dim=1).unsqueeze(-1)  # [B, L, 1]
+        return (hidden_states * weights).sum(dim=1)  # [B, D]
 
 
 def get_pooling(name: str, d_model: int = D_MODEL_300M) -> nn.Module:
