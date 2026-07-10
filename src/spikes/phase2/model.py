@@ -308,6 +308,82 @@ def cache_to_matrix(cache: dict):
     return matrix, id_to_idx
 
 
+# --------------------------------------------------------------------------
+# Hidden-state cache (M2-specific: pooling itself is trainable -- see AttnPooling's
+# docstring -- so we can't cache a *pooled* vector per protein like M1 does. Instead
+# cache each unique protein's per-residue backbone output (still a one-time cost,
+# since the backbone is frozen for M2), and apply AttnPooling fresh every batch.
+# --------------------------------------------------------------------------
+
+def build_hidden_state_cache(backbone, tokenizer, seqs: dict, device="cpu",
+                              batch_size: int = 8, verbose: bool = True) -> dict:
+    """Like build_embedding_cache, but skips pooling. Returns {protein_id: torch.Tensor
+    [L_i, D]} (CPU tensors, unpadded -- sequences have different lengths)."""
+    ids = list(seqs.keys())
+    cache = {}
+    backbone.eval()
+    pad_id = tokenizer.pad_token_id
+    with torch.no_grad():
+        for start in range(0, len(ids), batch_size):
+            batch_ids = ids[start:start + batch_size]
+            batch_seqs = [seqs[i] for i in batch_ids]
+            token_lists = [tokenizer.encode(s) for s in batch_seqs]
+            max_len = max(len(t) for t in token_lists)
+            padded = torch.full((len(token_lists), max_len), pad_id, dtype=torch.long)
+            for i, t in enumerate(token_lists):
+                padded[i, :len(t)] = torch.tensor(t, dtype=torch.long)
+            padded = padded.to(device)
+            mask = padded != pad_id
+            out = backbone(sequence_tokens=padded)
+            for i, pid in enumerate(batch_ids):
+                L = int(mask[i].sum().item())
+                cache[pid] = out.embeddings[i, :L].detach().cpu()  # [L_i, D], unpadded
+            if verbose and (start // batch_size) % 10 == 0:
+                print(f"  embedded (unpooled) {min(start + batch_size, len(ids))}/{len(ids)} unique sequences")
+    return cache
+
+
+def hidden_cache_to_list(cache: dict):
+    """Convert a {protein_id: [L_i, D] tensor} cache into an ordered list + an
+    id->index map -- the M2 analogue of cache_to_matrix(), returning a list (not a
+    stacked matrix) since sequences have different lengths."""
+    ids = list(cache.keys())
+    id_to_idx = {pid: i for i, pid in enumerate(ids)}
+    hidden_list = [cache[pid] for pid in ids]
+    return hidden_list, id_to_idx
+
+
+def pad_hidden_states(tensors: list):
+    """Pad a list of [L_i, D] tensors to [n, max_L, D] + a boolean mask [n, max_L]."""
+    n = len(tensors)
+    max_len = max(t.shape[0] for t in tensors)
+    d = tensors[0].shape[1]
+    padded = torch.zeros(n, max_len, d, dtype=tensors[0].dtype)
+    mask = torch.zeros(n, max_len, dtype=torch.bool)
+    for i, t in enumerate(tensors):
+        L = t.shape[0]
+        padded[i, :L] = t
+        mask[i, :L] = True
+    return padded, mask
+
+
+def batch_pooled_attn(idx_a: torch.Tensor, idx_b: torch.Tensor, hidden_list: list,
+                       pooling: nn.Module, device="cpu"):
+    """M2's per-batch counterpart to batch_features(): gather only the unique
+    proteins this batch actually needs, pad+pool them in one vectorized call (not a
+    per-protein Python loop), then scatter the pooled vectors back to idx_a/idx_b.
+    Must be called fresh every batch since `pooling` is trainable."""
+    unique_idx = torch.unique(torch.cat([idx_a, idx_b]))
+    local_pos = {int(gi): li for li, gi in enumerate(unique_idx.tolist())}
+    tensors = [hidden_list[int(gi)] for gi in unique_idx]
+    padded, mask = pad_hidden_states(tensors)
+    padded, mask = padded.to(device), mask.to(device)
+    pooled_unique = pooling(padded, mask)  # [n_unique_in_batch, D]
+    a_local = torch.tensor([local_pos[int(gi)] for gi in idx_a.tolist()], dtype=torch.long)
+    b_local = torch.tensor([local_pos[int(gi)] for gi in idx_b.tolist()], dtype=torch.long)
+    return pooled_unique[a_local], pooled_unique[b_local]
+
+
 class PairIndexDataset(torch.utils.data.Dataset):
     """Index-only dataset over (protein_a, protein_b, label) pairs -- does NOT
     materialize per-pair combined feature vectors. At D1's real scale (~420K train
