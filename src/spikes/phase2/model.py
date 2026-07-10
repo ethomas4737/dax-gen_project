@@ -15,13 +15,20 @@ Architecture (per spec):
   - M1: backbone fully frozen (requires_grad=False on all backbone params, forward
     pass wrapped in torch.no_grad()). Only the head is trained -- pooling is
     non-parametric mean-pooling, so there is nothing to train there.
+  - M3: backbone LoRA-wrapped via HuggingFace `peft` (see `apply_lora()` below) --
+    base weights frozen, small rank-r adapter matrices trainable on the attention
+    projections. `PairClassifier(backbone_trainable=True)` does NOT blanket-freeze
+    the backbone (unlike M1/M2); it trusts peft's own requires_grad wiring (base
+    frozen, lora_A/lora_B trainable), and encode()/forward() skip the no_grad()/
+    detach() calls so gradients flow through the adapters during training.
   - Backbone trainability (frozen vs LoRA-wrapped, for M3) and pooling strategy
     (mean vs attention, for M2) are kept as separate, swappable pieces on purpose.
-    M1 (frozen + mean-pool) and M2 (frozen + attention-pool, AttnPooling) are both
-    implemented; M3 (LoRA-wrapped trainable backbone) is not yet built.
+    All three variants are now implemented: M1 (frozen + mean-pool), M2 (frozen +
+    attention-pool, AttnPooling), M3 (LoRA-wrapped + either pooling).
     Note: M2's attention-pooling is trainable, so M1's embed-once-cache-forever
     trick (build_embedding_cache / cache_to_matrix, below) does not carry over to
-    M2 as-is -- see AttnPooling's docstring.
+    M2 as-is -- see AttnPooling's docstring. It does not apply to M3 at all, since
+    a trainable backbone means per-protein embeddings change every step.
 
 Known environment workaround: this DCC login node enforces a 2GB per-process RSS
 ulimit. `esm`'s stock `ESMC.from_pretrained(...)` loader (via
@@ -98,7 +105,41 @@ def load_esmc_300m(device="cpu", use_flash_attn=False):
 
 
 # --------------------------------------------------------------------------
-# Pooling (swappable: mean-pool for M1, attention-pool stub for M2)
+# LoRA wrapping (M3): frozen base backbone + small trainable rank-r adapters.
+# --------------------------------------------------------------------------
+
+LORA_TARGET_MODULES = ("layernorm_qkv.1", "out_proj")
+"""ESM-C's attention uses a *fused* QKV projection (one Linear producing q/k/v
+together, named `attn.layernorm_qkv.1` -- index .1 of a [LayerNorm, Linear]
+Sequential) plus a separate `attn.out_proj`, not the separate q_proj/k_proj/
+v_proj/o_proj names common in some other transformer implementations. Verified
+(2026-07-10, CPU) these two suffixes match exactly the 60 attention-projection
+Linears across all 30 blocks and nothing else (checked against the model's other
+non-block Linears, `sequence_head.{0,3}`, which don't match either suffix) --
+`peft.LoraConfig(target_modules=LORA_TARGET_MODULES)` attaches 120 LoRA tensors
+(2 per target module: lora_A + lora_B), e.g. 1,382,400 trainable params at r=8
+out of 334,379,584 total. Forward+backward verified end-to-end: LoRA params
+receive gradients, base backbone params do not.
+"""
+
+
+def apply_lora(backbone, r: int = 8, lora_alpha: int = 16, lora_dropout: float = 0.0):
+    """Wrap a loaded ESM-C backbone with LoRA adapters on the attention projections
+    (M3). Returns the peft-wrapped model: base weights frozen, only lora_A/lora_B
+    matrices trainable. Caller should pass this to PairClassifier(..., backbone_trainable=True)
+    so the base-freeze/no_grad logic there is skipped in favor of peft's own wiring.
+    """
+    from peft import LoraConfig, get_peft_model
+
+    lora_cfg = LoraConfig(
+        r=r, lora_alpha=lora_alpha, lora_dropout=lora_dropout, bias="none",
+        target_modules=list(LORA_TARGET_MODULES),
+    )
+    return get_peft_model(backbone, lora_cfg)
+
+
+# --------------------------------------------------------------------------
+# Pooling (swappable: mean-pool for M1, attention-pool for M2)
 # --------------------------------------------------------------------------
 
 class MeanPooling(nn.Module):
