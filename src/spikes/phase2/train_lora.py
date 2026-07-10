@@ -16,6 +16,14 @@ mechanisms -- trainable backbone and trainable pooling -- are kept separable by
 default rather than combined, for a cleaner one-axis-at-a-time comparison against
 M1/M2. Flagged in dax-state/plan-phase2.md; not explicitly specified by the human.)
 
+Per-epoch validation (added 2026-07-10, step 6 reopened per dax-state/decisions.md):
+after each training epoch, run a no-grad forward pass over data/curated/d1_ppi/val.csv
+(step 1c's dedicated split -- never data/curated/d1_ppi/test.csv, reserved for final
+held-out reporting) and print val_loss + val_auroc. Unlike train_frozen.py, M3 has no
+embed-once cache (trainable backbone) -- the val pass is structurally identical to the
+train pass (same tokenize + forward path) but with clf.eval() and no backward/optimizer
+step.
+
 Usage (smoke test):
     python train_lora.py --data-dir ../../../data/curated/d1_ppi_smoke \
         --out-dir ../../../runs/phase2_m3_d1/smoke --epochs 5 --device cpu
@@ -36,6 +44,7 @@ from model import (
     load_esmc_300m,
     PairClassifier,
     PairHead,
+    safe_auroc_auprc,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -66,7 +75,33 @@ def tokenize_batch(seqs, tokenizer, pad_id, device):
     return padded.to(device)
 
 
-def train(clf, dataset, tokenizer, epochs, lr, batch_size, device):
+@torch.no_grad()
+def evaluate_lora(clf, dataset, tokenizer, device, batch_size=32):
+    """Val pass for M3: no cache (trainable backbone) -- structurally the same
+    per-batch tokenize + forward as train(), but eval() + no_grad + no optimizer step."""
+    clf.eval()
+    pad_id = tokenizer.pad_token_id
+    n = len(dataset)
+    loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
+    total_loss, all_probs, all_labels = 0.0, [], []
+    for start in range(0, n, batch_size):
+        seq_a = dataset.seq_a[start:start + batch_size]
+        seq_b = dataset.seq_b[start:start + batch_size]
+        labels = torch.tensor(dataset.labels[start:start + batch_size], dtype=torch.float32, device=device)
+        ids_a = tokenize_batch(seq_a, tokenizer, pad_id, device)
+        ids_b = tokenize_batch(seq_b, tokenizer, pad_id, device)
+        logits = clf(ids_a, ids_b)
+        total_loss += loss_fn(logits, labels).item()
+        all_probs.append(torch.sigmoid(logits).cpu())
+        all_labels.append(labels.cpu())
+    clf.train()
+    probs = torch.cat(all_probs).numpy()
+    labels = torch.cat(all_labels).numpy()
+    auroc, _, _ = safe_auroc_auprc(labels, probs)
+    return total_loss / n, auroc
+
+
+def train(clf, dataset, tokenizer, epochs, lr, batch_size, device, val_dataset=None):
     clf = clf.to(device)
     trainable_params = [p for p in clf.parameters() if p.requires_grad]
     opt = torch.optim.Adam(trainable_params, lr=lr)
@@ -74,7 +109,7 @@ def train(clf, dataset, tokenizer, epochs, lr, batch_size, device):
     pad_id = tokenizer.pad_token_id
 
     n = len(dataset)
-    loss_history = []
+    loss_history, val_loss_history, val_auroc_history = [], [], []
     for epoch in range(epochs):
         perm = torch.randperm(n).tolist()
         epoch_losses = []
@@ -94,8 +129,15 @@ def train(clf, dataset, tokenizer, epochs, lr, batch_size, device):
             epoch_losses.append(loss.item())
         mean_loss = sum(epoch_losses) / len(epoch_losses)
         loss_history.append(mean_loss)
-        print(f"epoch {epoch+1}/{epochs}  mean_loss={mean_loss:.4f}")
-    return loss_history
+        if val_dataset is not None:
+            val_loss, val_auroc = evaluate_lora(clf, val_dataset, tokenizer, device)
+            val_loss_history.append(val_loss)
+            val_auroc_history.append(val_auroc)
+            print(f"epoch {epoch+1}/{epochs}  train_loss={mean_loss:.4f}  val_loss={val_loss:.4f}  "
+                  f"val_auroc={val_auroc}")
+        else:
+            print(f"epoch {epoch+1}/{epochs}  mean_loss={mean_loss:.4f}")
+    return loss_history, val_loss_history, val_auroc_history
 
 
 def main():
@@ -123,8 +165,9 @@ def main():
 
     t0 = time.time()
     train_df = pd.read_csv(data_dir / "train.csv")
+    val_df = pd.read_csv(data_dir / "val.csv")
     test_df = pd.read_csv(data_dir / "test.csv")
-    print(f"Loaded train={len(train_df)} rows, test={len(test_df)} rows from {data_dir}")
+    print(f"Loaded train={len(train_df)} rows, val={len(val_df)} rows, test={len(test_df)} rows from {data_dir}")
 
     print("Loading ESM-C 300M backbone + wrapping with LoRA (M3)...")
     backbone, tokenizer = load_esmc_300m(device=args.device)
@@ -140,9 +183,12 @@ def main():
     t_load = time.time()
 
     train_ds = PairSeqDataset(train_df["seq_a"], train_df["seq_b"], train_df["label"])
+    val_ds = PairSeqDataset(val_df["seq_a"], val_df["seq_b"], val_df["label"])
 
     print("Training M3 (LoRA backbone + pooling + head)...")
-    loss_history = train(clf, train_ds, tokenizer, args.epochs, args.lr, args.batch_size, args.device)
+    loss_history, val_loss_history, val_auroc_history = train(
+        clf, train_ds, tokenizer, args.epochs, args.lr, args.batch_size, args.device,
+        val_dataset=val_ds)
     t_train = time.time()
 
     torch.save(clf.state_dict(), out_dir / "model.pt")
@@ -153,6 +199,7 @@ def main():
         "lora_alpha": args.lora_alpha,
         "lora_dropout": args.lora_dropout,
         "n_train": len(train_df),
+        "n_val": len(val_df),
         "n_test": len(test_df),
         "n_trainable_params": n_trainable,
         "n_total_params": n_total,
@@ -161,6 +208,8 @@ def main():
         "batch_size": args.batch_size,
         "loss_history": loss_history,
         "loss_decreased": loss_history[-1] < loss_history[0] if len(loss_history) > 1 else None,
+        "val_loss_history": val_loss_history,
+        "val_auroc_history": val_auroc_history,
         "wall_time_s": {
             "setup": round(t_load - t0, 2),
             "training": round(t_train - t_load, 2),

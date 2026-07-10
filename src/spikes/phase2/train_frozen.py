@@ -14,6 +14,15 @@ protein once" efficiency trick -- but WHAT gets cached differs:
     -- and apply pooling fresh every batch (model.batch_pooled_attn), training
     both the pooling and the head.
 
+Per-epoch validation (added 2026-07-10, step 6 reopened per dax-state/decisions.md):
+after each training epoch, run a no-grad forward pass over data/curated/d1_ppi/val.csv
+(step 1c's dedicated split -- never data/curated/d1_ppi/test.csv, which stays reserved
+for final held-out reporting) and print val_loss + val_auroc. Both pooling variants
+reuse their existing cache mechanism for the val pass (embedding_matrix for mean,
+hidden_list + batch_pooled_attn for attn) since the backbone is frozen either way --
+only the val *pairs* are new, not new protein embeddings to compute (val's unique
+proteins are already included in the one-time cache built over train+val+test).
+
 Usage (smoke test):
     python train_frozen.py --pooling mean --data-dir ../../../data/curated/d1_ppi_smoke \
         --out-dir ../../../runs/phase2_m1_d1/smoke --epochs 5 --device cpu
@@ -42,14 +51,15 @@ from model import (
     load_esmc_300m,
     PairHead,
     PairIndexDataset,
+    safe_auroc_auprc,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def gather_unique_sequences(train_df, test_df):
+def gather_unique_sequences(*dfs):
     seqs = {}
-    for df in (train_df, test_df):
+    for df in dfs:
         for _, row in df[["protein_a", "seq_a"]].drop_duplicates().iterrows():
             seqs[row["protein_a"]] = row["seq_a"]
         for _, row in df[["protein_b", "seq_b"]].drop_duplicates().iterrows():
@@ -57,15 +67,69 @@ def gather_unique_sequences(train_df, test_df):
     return seqs
 
 
-def train_mean(head, dataset, embedding_matrix, epochs, lr, batch_size, device):
-    """M1: pooling has no params -- optimizer covers the head only."""
+@torch.no_grad()
+def evaluate_mean(head, dataset, embedding_matrix, device, batch_size=256):
+    """Val pass for M1 (mean-pool): reuses the same cached embedding_matrix +
+    batch_features lookup as training, just no_grad + head.eval() + no optimizer step."""
+    head.eval()
+    n = len(dataset)
+    total_loss, all_probs, all_labels = 0.0, [], []
+    loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
+    for start in range(0, n, batch_size):
+        idx_a = dataset.idx_a[start:start + batch_size].to(device)
+        idx_b = dataset.idx_b[start:start + batch_size].to(device)
+        labels = dataset.labels[start:start + batch_size].to(device)
+        combined = batch_features(idx_a, idx_b, embedding_matrix)
+        logits = head(combined)
+        total_loss += loss_fn(logits, labels).item()
+        all_probs.append(torch.sigmoid(logits).cpu())
+        all_labels.append(labels.cpu())
+    head.train()
+    probs = torch.cat(all_probs).numpy()
+    labels = torch.cat(all_labels).numpy()
+    auroc, _, _ = safe_auroc_auprc(labels, probs)
+    return total_loss / n, auroc
+
+
+@torch.no_grad()
+def evaluate_attn(head, pooling, dataset, hidden_list, device, batch_size=256):
+    """Val pass for M2 (attn-pool): reuses the same per-residue hidden_list cache +
+    batch_pooled_attn as training, just no_grad + eval() + no optimizer step."""
+    head.eval()
+    pooling.eval()
+    n = len(dataset)
+    total_loss, all_probs, all_labels = 0.0, [], []
+    loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
+    for start in range(0, n, batch_size):
+        idx_a = dataset.idx_a[start:start + batch_size]
+        idx_b = dataset.idx_b[start:start + batch_size]
+        labels = dataset.labels[start:start + batch_size].to(device)
+        pooled_a, pooled_b = batch_pooled_attn(idx_a, idx_b, hidden_list, pooling, device)
+        combined = combine_pair(pooled_a, pooled_b)
+        logits = head(combined)
+        total_loss += loss_fn(logits, labels).item()
+        all_probs.append(torch.sigmoid(logits).cpu())
+        all_labels.append(labels.cpu())
+    head.train()
+    pooling.train()
+    probs = torch.cat(all_probs).numpy()
+    labels = torch.cat(all_labels).numpy()
+    auroc, _, _ = safe_auroc_auprc(labels, probs)
+    return total_loss / n, auroc
+
+
+def train_mean(head, dataset, embedding_matrix, epochs, lr, batch_size, device,
+                val_dataset=None):
+    """M1: pooling has no params -- optimizer covers the head only. If val_dataset
+    is given, runs a no-grad validation pass (evaluate_mean, reusing the same
+    embedding_matrix cache) after every epoch and prints val_loss/val_auroc."""
     head = head.to(device)
     embedding_matrix = embedding_matrix.to(device)
     opt = torch.optim.Adam(head.parameters(), lr=lr)
     loss_fn = nn.BCEWithLogitsLoss()
 
     n = len(dataset)
-    loss_history = []
+    loss_history, val_loss_history, val_auroc_history = [], [], []
     for epoch in range(epochs):
         perm = torch.randperm(n)
         epoch_losses = []
@@ -82,20 +146,30 @@ def train_mean(head, dataset, embedding_matrix, epochs, lr, batch_size, device):
             epoch_losses.append(loss.item())
         mean_loss = sum(epoch_losses) / len(epoch_losses)
         loss_history.append(mean_loss)
-        print(f"epoch {epoch+1}/{epochs}  mean_loss={mean_loss:.4f}")
-    return loss_history
+        if val_dataset is not None:
+            val_loss, val_auroc = evaluate_mean(head, val_dataset, embedding_matrix, device)
+            val_loss_history.append(val_loss)
+            val_auroc_history.append(val_auroc)
+            print(f"epoch {epoch+1}/{epochs}  train_loss={mean_loss:.4f}  val_loss={val_loss:.4f}  "
+                  f"val_auroc={val_auroc}")
+        else:
+            print(f"epoch {epoch+1}/{epochs}  mean_loss={mean_loss:.4f}")
+    return loss_history, val_loss_history, val_auroc_history
 
 
-def train_attn(head, pooling, dataset, hidden_list, epochs, lr, batch_size, device):
+def train_attn(head, pooling, dataset, hidden_list, epochs, lr, batch_size, device,
+                val_dataset=None):
     """M2: pooling is trainable -- optimizer covers pooling + head, and pooled
-    vectors are recomputed fresh every batch (model.batch_pooled_attn)."""
+    vectors are recomputed fresh every batch (model.batch_pooled_attn). If
+    val_dataset is given, runs a no-grad validation pass (evaluate_attn, reusing
+    the same hidden_list cache) after every epoch and prints val_loss/val_auroc."""
     head = head.to(device)
     pooling = pooling.to(device)
     opt = torch.optim.Adam(list(head.parameters()) + list(pooling.parameters()), lr=lr)
     loss_fn = nn.BCEWithLogitsLoss()
 
     n = len(dataset)
-    loss_history = []
+    loss_history, val_loss_history, val_auroc_history = [], [], []
     for epoch in range(epochs):
         perm = torch.randperm(n)
         epoch_losses = []
@@ -113,8 +187,15 @@ def train_attn(head, pooling, dataset, hidden_list, epochs, lr, batch_size, devi
             epoch_losses.append(loss.item())
         mean_loss = sum(epoch_losses) / len(epoch_losses)
         loss_history.append(mean_loss)
-        print(f"epoch {epoch+1}/{epochs}  mean_loss={mean_loss:.4f}")
-    return loss_history
+        if val_dataset is not None:
+            val_loss, val_auroc = evaluate_attn(head, pooling, val_dataset, hidden_list, device)
+            val_loss_history.append(val_loss)
+            val_auroc_history.append(val_auroc)
+            print(f"epoch {epoch+1}/{epochs}  train_loss={mean_loss:.4f}  val_loss={val_loss:.4f}  "
+                  f"val_auroc={val_auroc}")
+        else:
+            print(f"epoch {epoch+1}/{epochs}  mean_loss={mean_loss:.4f}")
+    return loss_history, val_loss_history, val_auroc_history
 
 
 def main():
@@ -140,11 +221,12 @@ def main():
 
     t0 = time.time()
     train_df = pd.read_csv(data_dir / "train.csv")
+    val_df = pd.read_csv(data_dir / "val.csv")
     test_df = pd.read_csv(data_dir / "test.csv")
-    print(f"Loaded train={len(train_df)} rows, test={len(test_df)} rows from {data_dir}")
+    print(f"Loaded train={len(train_df)} rows, val={len(val_df)} rows, test={len(test_df)} rows from {data_dir}")
 
-    unique_seqs = gather_unique_sequences(train_df, test_df)
-    print(f"{len(unique_seqs)} unique protein sequences to embed (train+test combined)")
+    unique_seqs = gather_unique_sequences(train_df, val_df, test_df)
+    print(f"{len(unique_seqs)} unique protein sequences to embed (train+val+test combined)")
 
     print(f"Loading ESM-C 300M backbone (frozen for {'M1' if args.pooling == 'mean' else 'M2'})...")
     backbone, tokenizer = load_esmc_300m(device=args.device)
@@ -169,11 +251,13 @@ def main():
         print(f"Embedding cache built: {len(cache)} vectors, dim={D_MODEL_300M}, took {t_embed - t_load:.1f}s")
 
         train_ds = PairIndexDataset(train_df["protein_a"], train_df["protein_b"], train_df["label"], id_to_idx)
+        val_ds = PairIndexDataset(val_df["protein_a"], val_df["protein_b"], val_df["label"], id_to_idx)
         test_ds = PairIndexDataset(test_df["protein_a"], test_df["protein_b"], test_df["label"], id_to_idx)
 
         print("Training head (pooling has no trainable params)...")
-        loss_history = train_mean(head, train_ds, embedding_matrix, args.epochs, args.lr,
-                                   args.batch_size, args.device)
+        loss_history, val_loss_history, val_auroc_history = train_mean(
+            head, train_ds, embedding_matrix, args.epochs, args.lr, args.batch_size, args.device,
+            val_dataset=val_ds)
         t_train = time.time()
 
         torch.save(head.state_dict(), out_dir / "head.pt")
@@ -189,11 +273,13 @@ def main():
         print(f"Hidden-state cache built: {len(cache)} proteins, dim={D_MODEL_300M}, took {t_embed - t_load:.1f}s")
 
         train_ds = PairIndexDataset(train_df["protein_a"], train_df["protein_b"], train_df["label"], id_to_idx)
+        val_ds = PairIndexDataset(val_df["protein_a"], val_df["protein_b"], val_df["label"], id_to_idx)
         test_ds = PairIndexDataset(test_df["protein_a"], test_df["protein_b"], test_df["label"], id_to_idx)
 
         print("Training pooling + head...")
-        loss_history = train_attn(head, pooling, train_ds, hidden_list, args.epochs, args.lr,
-                                   args.batch_size, args.device)
+        loss_history, val_loss_history, val_auroc_history = train_attn(
+            head, pooling, train_ds, hidden_list, args.epochs, args.lr, args.batch_size, args.device,
+            val_dataset=val_ds)
         t_train = time.time()
 
         torch.save(head.state_dict(), out_dir / "head.pt")
@@ -205,6 +291,7 @@ def main():
     meta = {
         "pooling": args.pooling,
         "n_train": len(train_df),
+        "n_val": len(val_df),
         "n_test": len(test_df),
         "n_unique_sequences": len(unique_seqs),
         "d_model": D_MODEL_300M,
@@ -216,6 +303,8 @@ def main():
         "batch_size": args.batch_size,
         "loss_history": loss_history,
         "loss_decreased": loss_history[-1] < loss_history[0] if len(loss_history) > 1 else None,
+        "val_loss_history": val_loss_history,
+        "val_auroc_history": val_auroc_history,
         "wall_time_s": {
             "data_load": round(t_load - t0, 2),
             "embedding_cache": round(t_embed - t_load, 2),

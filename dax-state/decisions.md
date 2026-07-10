@@ -2,8 +2,8 @@
 
 ## Current state
 **Last updated:** 2026-07-10
-**Load-bearing as of this date:** The ESM-C checkpoint loader workaround (2026-07-09) remains load-bearing for Phase 2. The 2026-07-10 val-split/D4-objective entry is now also load-bearing — it reopens steps 1 and 6 in `plan-phase2.md` and sets D4 as the headline eval metric.
-**What's new since last update:** Added the val-split-source / cross-species-scope / D4-as-objective decision (2026-07-10).
+**Load-bearing as of this date:** The ESM-C checkpoint loader workaround (2026-07-09) remains load-bearing for Phase 2. The 2026-07-10 val-split/D4-objective entry is now also load-bearing — it reopens steps 1 and 6 in `plan-phase2.md` and sets D4 as the headline eval metric. Steps 1c and 6 are now closed (done) per this session's work; the val split is 90/10 (confirmed, not 85/15).
+**What's new since last update:** Added the val-split-source / cross-species-scope / D4-as-objective decision (2026-07-10). Added the sbatch-vs-interactive-session memory-constraint decision (2026-07-10, same day) made while implementing step 1c.
 
 Append-only. Log material decisions made without human consultation: architectural choices, tradeoffs, deviations from plan. If a prior decision is later reversed, append a new entry — do not edit.
 
@@ -50,3 +50,15 @@ Format per entry: date, context, decision, rationale, reversibility (easy / medi
 **Reversibility:** easy — isolated to `data_prep.py`'s split logic, the training scripts' validation loop, and `evaluate.py`'s reporting emphasis; no downstream code depends on this framing yet.
 
 **Surface to human.** This entry; also reflected in `spec/spec.md` and `dax-state/plan-phase2.md` updates the same session.
+
+### 2026-07-10 — Run non-trivial Phase 2 CPU work via `sbatch`, not the interactive session
+
+**Context.** Implementing step 1c's val split, a small addition to `data_prep.py::curate()` (a memory-lean overlap check + a stratified split) repeatedly OOM-killed (exit 137) in this session's interactive OnDemand Jupyter node, even though the *unmodified* `curate()` had run clean before. Root-caused: the interactive job enforces a **job-wide** (not per-process) ~2GB cgroup v2 memory cap shared across every resident process in that SLURM job — Jupyter server, this agent's own harness process(es), and any new subprocess — and baseline usage from those resident processes alone (~800-840MB) already left very little headroom; the original `curate()` was already running within ~40MB of the ceiling.
+
+**Decision.** (1) Made the val-split overlap check memory-lean (`pd.util.hash_pandas_object` + `np.intersect1d` instead of Python sets of tuples/frozensets). (2) For the actual production runs (full `data_prep.py` curation, and the 6-combination train+eval smoke test), submitted them as separate `sbatch` jobs (partition `common`, `--mem=8G`, ~10-20 min walltime) rather than running directly in the interactive session.
+
+**Rationale.** A modest CPU-only batch submission is a normal, low-risk executor action — distinct from the GPU allocation steps (8a) that require human approval per `CLAUDE.md`. It sidesteps a structural memory constraint of the interactive session (shared across unrelated processes I don't control) rather than trying to shrink an already-lean pipeline further. Both jobs completed cleanly with several GB of headroom to spare.
+
+**Reversibility:** easy — isolated to how this session invoked the scripts; the scripts themselves are unchanged in their expected calling convention (`python data_prep.py`, `python train_frozen.py ...`) and would run identically under `srun`/`sbatch`/direct-python on a less memory-constrained node.
+
+**Surface to human.** This entry; also documented in `dax-state/runs/phase2-1c-6-validation-split.md` Finding #1 and `dax-state/journal.md`'s 2026-07-10 "Memory-constraint finding" note.

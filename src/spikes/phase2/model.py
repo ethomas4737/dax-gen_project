@@ -44,8 +44,10 @@ fallback used only if it still fails.
 """
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 ESMC_300M_HF_REPO = "biohub/esmc-300m-2024-12"
 D_MODEL_300M = 960
@@ -404,6 +406,17 @@ class PairIndexDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         return self.idx_a[i], self.idx_b[i], self.labels[i]
+
+
+def safe_auroc_auprc(labels, probs):
+    """Shared metrics helper -- used by evaluate.py's final held-out reporting AND
+    by train_frozen.py/train_lora.py's per-epoch validation loop (step 6, 2026-07-10),
+    factored out here once rather than duplicated across those 3 files. Returns
+    (auroc, auprc, note); note is set (auroc/auprc None) if only one class is present
+    in `labels`, which a tiny smoke-scale val split can hit by chance."""
+    if len(np.unique(labels)) < 2:
+        return None, None, "only one class present"
+    return round(roc_auc_score(labels, probs), 4), round(average_precision_score(labels, probs), 4), None
 
 
 def batch_features(idx_a: torch.Tensor, idx_b: torch.Tensor, embedding_matrix: torch.Tensor) -> torch.Tensor:

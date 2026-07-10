@@ -29,10 +29,8 @@ import argparse
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import torch
-from sklearn.metrics import average_precision_score, roc_auc_score
 
 from model import (
     D_MODEL_300M,
@@ -44,6 +42,7 @@ from model import (
     pad_hidden_states,
     PairClassifier,
     PairHead,
+    safe_auroc_auprc,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -57,12 +56,6 @@ D1_LENGTH_BASELINE = {
     "positive_rate_floor": 0.0909,
     "n_test_raw": 52725,
 }
-
-
-def safe_auroc_auprc(labels, probs):
-    if len(np.unique(labels)) < 2:
-        return None, None, "only one class present"
-    return round(roc_auc_score(labels, probs), 4), round(average_precision_score(labels, probs), 4), None
 
 
 def stratified_by_length(test_df, probs, labels, n_bins=10):
