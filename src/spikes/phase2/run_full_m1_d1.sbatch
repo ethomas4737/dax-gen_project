@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:a6000:1
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=32G
-#SBATCH --time=4:00:00
+#SBATCH --time=1:00:00
 #SBATCH --output=/hpc/group/singhlab/user/emt70/rp1_project/dax-gen_project/runs/phase2_m1_d1/full/slurm-%j.out
 
 set -euo pipefail
@@ -19,7 +19,13 @@ echo "Node: $(hostname)"
 nvidia-smi -L
 echo "Repo SHA: $(git -C "$REPO" rev-parse HEAD)"
 echo "Repo dirty check:"
-git -C "$REPO" status --porcelain
+DIRTY=$(git -C "$REPO" status --porcelain)
+if [ -n "$DIRTY" ]; then
+    echo "ERROR: repo is dirty, aborting for reproducibility:"
+    echo "$DIRTY"
+    exit 1
+fi
+echo "(clean)"
 echo "Input file hashes:"
 sha256sum "$REPO/data/curated/d1_ppi/train.csv" "$REPO/data/curated/d1_ppi/test.csv"
 cp "$0" "$OUT_DIR/submitted_script.sbatch"
