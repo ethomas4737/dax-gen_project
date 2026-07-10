@@ -10,23 +10,23 @@
 
 **Phase 1** deliverables complete (`rawdata/{ppi,avida,mlaep}/`, `docs/eda-*`, `docs/phase1_eda_summary.md`, D1-D4 combined datasets, length-only baseline + confound follow-up). Not formally closed — no close-out checklist run yet (deferred while Phase 2 work was prioritized).
 
-**Phase 2** (`dax-state/plan-phase2.md`) — 11-step plan (steps 0-10), **plan presented, not yet approved to execute**. Only step 0 is done:
+**Phase 2** (`dax-state/plan-phase2.md`) — 13-row plan (steps 0-10, with 8/9 split into a/b). All 5 open decisions **resolved** 2026-07-10. **Near-term scope narrowed 2026-07-10:** human is weighing alternatives to D2 and doesn't want D2/D3 work started — focus is the 3 D1-only runs (M1/M2/M3 × D1) first; steps 2, 3, 8b, 9b are **deferred**, not cancelled.
 - Step 0 (M1 pipeline scaffold + CPU smoke test, human-species D1 subset only): **done**, but superseded — real D1 curation (step 1) needs all 6 species.
-- Steps 1-10 (multi-species D1 curation, D2/D3 curated splits, M2 attention-pooling, M3 LoRA-wrapped backbone, generalized train/eval scripts, D4 held-out harness, 9 training runs, 9 D4 evals, consolidated report): **not started**.
-- **5 open decisions block specific steps** — see `dax-state/plan-phase2.md` "Open decisions" section (D1 concatenation approach, D2 split methodology, D3 split assumption, M3's LoRA approach + resource estimate, how much M1/M2 vs. M3 training code to share).
+- Steps 1, 4, 5, 6, 7, 8a, 9a, 10 (D1 full-species curation → M2 attention-pooling → M3 LoRA-wrapped backbone → train_frozen.py/train_lora.py → D4 held-out harness → 3 D1 training runs → D4 eval on those 3 → eval report): **not started**, unblocked, ready to execute pending final go-ahead.
+- Steps 2, 3, 8b, 9b (D2/D3 curation + the 6 D2/D3 training runs + their D4 eval): **deferred**.
 
 ## Next action
 
-1. **Human decision needed:** approve the rewritten `plan-phase2.md` (or redirect it) before any execution starts — this is a much larger scope than the single M1-on-D1 run this session began with.
-2. Resolve the 5 open decisions listed in `plan-phase2.md`, at least for whichever steps get tackled first.
-3. Once approved: likely build order is step 1 (D1 full-species curation) → step 4 (M2, independent, can parallelize) → steps 2-3 (D2/D3 splits) → step 5-6 (M3 + generalized scripts) → step 7 (D4 harness) → steps 8-10 (run + eval + report). Not yet confirmed with the human.
-4. Independent QA-executor pass on step 0/1's dedup+filter logic is still outstanding regardless of sequencing.
+1. **Human go-ahead needed** to start executing steps 1/4/5 (can run in parallel — no interdependency between D1 curation, M2, and M3 builds).
+2. Build order for the D1-only near-term scope: step 1 (D1 full-species curation) + step 4 (M2) + step 5 (M3, incl. a quick `peft`-vs-ESM-C compatibility check) in parallel → step 6 (train_frozen.py/train_lora.py) → step 7 (D4 harness) → step 8a (3 GPU training runs, human approval needed per allocation) → step 9a (D4 eval) → step 10 (D1-only eval report).
+3. Independent QA-executor pass on step 0/1's dedup+filter logic is still outstanding regardless of sequencing.
+4. D2/D3 work (steps 2, 3, 8b, 9b) resumes once the D2 dataset question is settled — no action needed there for now.
 5. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — still outstanding, deferred.
 
 ## Open blockers
 
-- Phase 2's rewritten plan needs human approval before execution (Article 1) — see Next action #1.
-- 5 open decisions in `plan-phase2.md` block their respective steps.
+- Phase 2 needs a final human go-ahead to start executing (Article 1) — see Next action #1.
+- D2/D3 portions (steps 2, 3, 8b, 9b) on hold pending the human's D2-alternatives decision (not currently being worked).
 
 ## DCC state
 
