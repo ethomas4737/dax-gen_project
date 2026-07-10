@@ -4,33 +4,33 @@
 
 ## Last updated
 
-**2026-07-10** — Formalized Phase 2 opening. A prior session had already built and CPU-smoke-tested a full M1-on-D1 pipeline (`src/spikes/phase2/`) without going through the phase-open protocol (no spec section, no plan, uncommitted). This session backfilled `spec/spec.md` (Revision 2026-07-10), created `dax-state/plan-phase2.md`, backfilled `journal.md` + `decisions.md`, removed a stray empty file (`src/spikes/phase2/untitled.py`), and committed.
+**2026-07-10** — Corrected Phase 2's scope. It's actually a **9-run matrix** (3 models M1/M2/M3 × 3 datasets D1/D2/D3, with D4 held-out for eval on all 9) — this had been discussed in an earlier conversation that never landed in this project's durable state, so it was invisible until the human raised it directly this session. `spec/spec.md` (Revision 2026-07-10b) and `dax-state/plan-phase2.md` have been rewritten to the corrected scope and are **awaiting human approval to execute** past step 0. Also: job 49561386 (the single M1-on-D1 GPU run from earlier this session) failed on its own (dirty-repo guard working as intended, no compute wasted) and needs redoing anyway once D1's curation is extended to all 6 species — the pipeline built so far only covers the human-species subset.
 
 ## Current position
 
 **Phase 1** deliverables complete (`rawdata/{ppi,avida,mlaep}/`, `docs/eda-*`, `docs/phase1_eda_summary.md`, D1-D4 combined datasets, length-only baseline + confound follow-up). Not formally closed — no close-out checklist run yet (deferred while Phase 2 work was prioritized).
 
-**Phase 2** (`dax-state/plan-phase2.md`) now open. Goal: first PLM baseline model ("M1" = frozen ESM-C 300M + MLP head) on D1, compared against the 0.652 AUROC length-only floor.
-- Step 1 (pipeline build + CPU smoke test): **done**. `src/spikes/phase2/{data_prep,model,train_m1,evaluate}.py`; curated D1 = 419,916 train / 52,424 test rows (dedup + bad-residue filtered); smoke run passed end-to-end. See `dax-state/runs/phase2-m1-d1-pipeline.md`.
-- Step 1-qa: **partial** — self-verified in the run-note (independent re-derivation of key counts), no separate qa-executor dispatch yet.
-- Step 2 (real GPU training run, full curated D1): **not started** — blocked on human approval to request a GPU allocation.
-- Step 3 (evaluation report, length-stratified): **not started**.
+**Phase 2** (`dax-state/plan-phase2.md`) — 11-step plan (steps 0-10), **plan presented, not yet approved to execute**. Only step 0 is done:
+- Step 0 (M1 pipeline scaffold + CPU smoke test, human-species D1 subset only): **done**, but superseded — real D1 curation (step 1) needs all 6 species.
+- Steps 1-10 (multi-species D1 curation, D2/D3 curated splits, M2 attention-pooling, M3 LoRA-wrapped backbone, generalized train/eval scripts, D4 held-out harness, 9 training runs, 9 D4 evals, consolidated report): **not started**.
+- **5 open decisions block specific steps** — see `dax-state/plan-phase2.md` "Open decisions" section (D1 concatenation approach, D2 split methodology, D3 split assumption, M3's LoRA approach + resource estimate, how much M1/M2 vs. M3 training code to share).
 
 ## Next action
 
-1. **Human decision needed:** approve requesting a GPU allocation for Phase 2 step 2 (`singhlab-gpu`, 1x A6000, est. ~15-30 min compute / 1hr walltime ask — see resource estimate in `dax-state/runs/phase2-m1-d1-pipeline.md`).
-2. Once approved: submit the real M1-on-D1 training run via `sbatch` (there's already a draft `src/spikes/phase2/run_full_m1_d1.sbatch` — review before submitting, it predates this formalization pass and hasn't been checked this session).
-3. After training: build the evaluation report (step 3) — aggregate AUROC/AUPRC + length-decile-stratified table vs. the length-only baseline, per `docs/phase1_eda_summary.md` §3.1.
-4. Independent QA-executor pass on step 1 (currently only self-verified) — can happen in parallel with step 2.
+1. **Human decision needed:** approve the rewritten `plan-phase2.md` (or redirect it) before any execution starts — this is a much larger scope than the single M1-on-D1 run this session began with.
+2. Resolve the 5 open decisions listed in `plan-phase2.md`, at least for whichever steps get tackled first.
+3. Once approved: likely build order is step 1 (D1 full-species curation) → step 4 (M2, independent, can parallelize) → steps 2-3 (D2/D3 splits) → step 5-6 (M3 + generalized scripts) → step 7 (D4 harness) → steps 8-10 (run + eval + report). Not yet confirmed with the human.
+4. Independent QA-executor pass on step 0/1's dedup+filter logic is still outstanding regardless of sequencing.
 5. Eventually: Phase 1 close-out checklist (`../dax/phase-lifecycle.md`) — still outstanding, deferred.
 
 ## Open blockers
 
-- Phase 2 step 2 needs human approval before a GPU allocation is requested (see Next action #1).
+- Phase 2's rewritten plan needs human approval before execution (Article 1) — see Next action #1.
+- 5 open decisions in `plan-phase2.md` block their respective steps.
 
 ## DCC state
 
-**Job 49561386** — real M1-on-D1 training run, `singhlab-gpu` (1x A6000), submitted 2026-07-10, 1hr walltime cap (est. actual ~15-30 min). Output: `runs/phase2_m1_d1/full/slurm-49561386.out`. Check with `squeue -j 49561386` or `sacct -j 49561386 -o JobID,State,Elapsed,MaxRSS,ExitCode`. Separately: a CPU-only `sys/dashboard` job (`common` partition) is the interactive session this work is being coordinated from.
+No GPU allocation currently held. Job 49561386 (single M1-on-D1 run, human-species-only D1) FAILED by design (dirty-repo guard) and is superseded by the corrected plan above — do not resubmit it as-is. Currently on a CPU-only `sys/dashboard` job (`common` partition) coordinating this work.
 
 ## WSL / local state
 

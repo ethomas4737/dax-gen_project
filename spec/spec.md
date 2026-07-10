@@ -2,8 +2,8 @@
 
 ## Current state
 **Last updated:** 2026-07-10
-**Load-bearing as of this date:** Phase 1 (curate 3 datasets + EDA + D1-D4 combinations + length-only baseline) complete, not yet formally closed. Phase 2 (PLM baseline modeling) now open — see "Revision 2026-07-10" below.
-**What's new since last update:** Phase 2 opened: M1 (frozen ESM-C 300M + MLP head) pipeline built + CPU-smoke-tested on D1; real GPU training run not yet started (pending GPU allocation approval).
+**Load-bearing as of this date:** Phase 1 (curate 3 datasets + EDA + D1-D4 combinations + length-only baseline) complete, not yet formally closed. Phase 2's **real scope is a 3x3 matrix** (models M1/M2/M3 × datasets D1/D2/D3, D4 held-out for eval) — see "Revision 2026-07-10b" below, which supersedes the single-run framing in "Revision 2026-07-10".
+**What's new since last update:** Human clarified the 9-run matrix (previously undocumented). Also surfaced: the M1-on-D1 pipeline built so far only curates D1's human-species subset, not the full 6-species D1 the spec defines — needs extending before any run counts as a valid D1 result.
 
 ## Goal
 
@@ -97,6 +97,25 @@ Deliverables:
 Acceptance criteria: the pipeline runs end-to-end on a real GPU allocation against the full curated D1 data (not just the CPU smoke subset); the evaluation report includes both the aggregate metric and the length-stratified breakdown, explicitly compared to the 0.652 AUROC length-only floor.
 
 Note: deliverable 1 was actually built in a prior session without a formal phase-open (no `plan-phase2.md` existed yet at the time). This revision retroactively formalizes it per Manifesto §6. See `dax-state/decisions.md` for the one autonomous technical decision made during that build (ESM-C checkpoint loader workaround).
+
+---
+
+## Revision 2026-07-10b — Phase 2's real scope: 3 models × 3 datasets, D4 held-out
+
+Supersedes the single-run (M1-on-D1-only) framing above, which was incomplete — the human clarified the actual intended scope (from an earlier conversation not captured in this project's durable state at the time):
+
+**9 training runs = models {M1, M2, M3} × datasets {D1, D2, D3}.** **D4 is not a training input** for any of the 9 — it stays the held-out evaluation partition (both its ACE2 axis and its 8-antibody-escape-panel axis, per the Phase 1 combined-dataset work) used to evaluate all 9 trained models' generalization to viral antigen binding.
+
+- **M1** — frozen ESM-C 300M backbone (mean-pooled) + trainable MLP head. Built and CPU-smoke-tested (Revision 2026-07-10 deliverable 1). `model.py` already structures the backbone/pooling/head as swappable pieces for M2/M3.
+- **M2** — frozen ESM-C 300M backbone + **attention-pooling** (vs. M1's mean-pooling) + MLP head. Currently a structural stub in `model.py` (`AttnPooling` raises `NotImplementedError`) — not built.
+- **M3** — ESM-C 300M backbone **LoRA-wrapped and trainable** (vs. M1/M2's frozen backbone) + pooling + MLP head. Not built. Note: M1/M2's core efficiency trick (embed each unique protein once, cache, train only the head) does not carry over to M3 — a trainable backbone means embeddings change every optimizer step, so M3 needs a different training loop (backbone forward pass per batch, not a fixed cache). This changes M3's resource estimate materially vs. M1/M2's.
+- **D1** — full D-SCRIPT PPI, **all 6 species** (716,517 rows per the Revision 2026-07-09 definition), not just the human subset currently curated in `data/curated/d1_ppi/`. `data_prep.py` needs extending to cover mouse/fly/yeast/worm/ecoli before any D1 run is valid against this spec.
+- **D2** — AVIDa, no-COVID (hIL6 + hTNFa), per the Revision 2026-07-09 definition. No curated train/test split exists yet for training purposes (Phase 1's length baseline used an ad hoc 80/20 stratified split, not saved as a reusable artifact).
+- **D3** — D1 ∪ D2 per the Revision 2026-07-09 definition. No curated train/test split exists yet.
+
+**Acceptance criteria (revised):** all 9 (model × dataset) combinations trained and evaluated on their own dataset's held-out test split, **plus** all 9 evaluated against D4 (both axes) as a fixed generalization check; each result reported with the length-decile-stratified breakdown (Phase 1 §3.1 requirement) alongside the aggregate metric, and compared against the appropriate length-only baseline per dataset.
+
+This is a substantially larger scope than Revision 2026-07-10's single M1-on-D1 run. See `dax-state/plan-phase2.md` (rewritten) for the build plan, presented to the human for approval before execution per Manifesto §6.
 
 <!--
 Spec-writing notes (per `../dax/agent-configs/spec-writer.md` + Legislation §3):
